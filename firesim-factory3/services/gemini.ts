@@ -1,21 +1,15 @@
-// Gemini API 서비스 - 인포그래픽 이미지 생성
+// Imagen 3 API 서비스 - 인포그래픽 이미지 생성
 import { FinalReportData } from '../types';
 
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
-// Gemini 2.0 Flash Experimental (이미지 생성 지원)
-const IMAGE_MODEL = 'gemini-2.0-flash-exp';
+// Imagen 3 모델 (고품질 이미지 생성)
+const IMAGEN_MODEL = 'imagen-3.0-generate-002';
 
-interface GeminiImageResponse {
-  candidates?: Array<{
-    content?: {
-      parts?: Array<{
-        text?: string;
-        inlineData?: {
-          mimeType: string;
-          data: string; // base64 encoded image
-        };
-      }>;
+interface ImagenResponse {
+  generatedImages?: Array<{
+    image?: {
+      imageBytes: string; // base64 encoded image
     };
   }>;
   error?: {
@@ -26,36 +20,33 @@ interface GeminiImageResponse {
 
 // 보고서 데이터를 기반으로 인포그래픽 생성 프롬프트 생성
 const createInfographicPrompt = (report: FinalReportData, teamName: string): string => {
-  return `당신은 전문 비즈니스 인포그래픽 디자이너입니다.
-아래 정보를 바탕으로 깔끔하고 전문적인 비즈니스 보고서 인포그래픽 이미지를 생성해주세요.
+  // Imagen 3는 영어 프롬프트에서 더 좋은 결과를 생성함
+  return `Create a professional business infographic report with the following information:
 
-보고서 정보:
-- 제목: ${report.title}
-- 팀명: ${teamName}
-- 팀원: ${report.members}
+Title: ${report.title}
+Team: ${teamName}
+Members: ${report.members}
 
-주요 내용:
-1. 현상 파악 (Facts): ${report.situation}
-2. 문제 정의 (Gap Analysis): ${report.definition}
-3. 원인 분석 (Root Cause): ${report.cause}
-4. 해결 방안 (Solutions): ${report.solution}
-5. 재발 방지 대책 (Prevention): ${report.prevention}
-6. 실행 일정 (Schedule): ${report.schedule}
+Key Sections:
+1. SITUATION (Current Facts): ${report.situation}
+2. PROBLEM DEFINITION (Gap Analysis): ${report.definition}
+3. ROOT CAUSE ANALYSIS: ${report.cause}
+4. SOLUTIONS: ${report.solution}
+5. PREVENTION MEASURES: ${report.prevention}
+6. ACTION TIMELINE: ${report.schedule}
 
-디자인 요구사항:
-- 16:9 가로 레이아웃
-- 깔끔한 비즈니스 스타일
-- 섹션별로 구분된 레이아웃 (벤토 그리드 스타일)
-- 아이콘과 시각적 요소 사용
-- 주요 포인트 강조
-- 컬러 팔레트: 노란색(#fbbf24), 파란색(#4f46e5), 흰색, 검정색
-- 한국어 텍스트 포함
-- 전문적이고 임원 보고에 적합한 스타일
-
-이미지만 생성해주세요. 설명 텍스트 없이 인포그래픽 이미지만 출력합니다.`;
+Design Requirements:
+- Clean, modern business infographic style
+- Bento grid layout with distinct sections
+- Color palette: Yellow (#fbbf24), Indigo (#4f46e5), White, Black
+- Include icons and visual elements for each section
+- Professional executive-level presentation
+- Bold typography with clear hierarchy
+- Include Korean text labels for each section
+- High contrast borders and shadows for neo-brutalist style`;
 };
 
-// Gemini API를 사용하여 인포그래픽 이미지 생성
+// Imagen 3 API를 사용하여 인포그래픽 이미지 생성
 export const generateInfographicImage = async (
   report: FinalReportData,
   teamName: string
@@ -73,20 +64,23 @@ export const generateInfographicImage = async (
 
   try {
     const response = await fetch(
-      `${GEMINI_API_BASE}/${IMAGE_MODEL}:generateContent?key=${apiKey}`,
+      `${GEMINI_API_BASE}/${IMAGEN_MODEL}:generateImages?key=${apiKey}`,
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          contents: [{
-            parts: [{
-              text: prompt
-            }]
-          }],
-          generationConfig: {
-            responseModalities: ['Text', 'Image']
+          instances: [
+            {
+              prompt: prompt
+            }
+          ],
+          parameters: {
+            sampleCount: 1,
+            aspectRatio: '16:9',
+            personGeneration: 'DONT_ALLOW',
+            safetySetting: 'BLOCK_MEDIUM_AND_ABOVE'
           }
         })
       }
@@ -94,14 +88,28 @@ export const generateInfographicImage = async (
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Gemini API error:', errorText);
+      console.error('Imagen 3 API error:', errorText);
+
+      // 에러 메시지 파싱 시도
+      try {
+        const errorJson = JSON.parse(errorText);
+        if (errorJson.error?.message) {
+          return {
+            success: false,
+            error: `API 오류: ${errorJson.error.message}`
+          };
+        }
+      } catch {
+        // JSON 파싱 실패시 원본 에러 사용
+      }
+
       return {
         success: false,
         error: `API 오류: ${response.status} - ${response.statusText}`
       };
     }
 
-    const data: GeminiImageResponse = await response.json();
+    const data: ImagenResponse = await response.json();
 
     if (data.error) {
       return {
@@ -111,34 +119,23 @@ export const generateInfographicImage = async (
     }
 
     // 응답에서 이미지 데이터 추출
-    const parts = data.candidates?.[0]?.content?.parts;
-    if (!parts) {
+    const generatedImage = data.generatedImages?.[0];
+    if (!generatedImage?.image?.imageBytes) {
       return {
         success: false,
-        error: '응답에서 이미지를 찾을 수 없습니다.'
-      };
-    }
-
-    // 이미지 파트 찾기
-    const imagePart = parts.find(part => part.inlineData);
-    if (!imagePart?.inlineData) {
-      return {
-        success: false,
-        error: '이미지 생성에 실패했습니다. 텍스트만 반환되었습니다.'
+        error: '이미지 생성에 실패했습니다. 응답에 이미지가 없습니다.'
       };
     }
 
     // Base64를 Blob으로 변환
-    const base64Data = imagePart.inlineData.data;
-    const mimeType = imagePart.inlineData.mimeType;
-
+    const base64Data = generatedImage.image.imageBytes;
     const byteCharacters = atob(base64Data);
     const byteNumbers = new Array(byteCharacters.length);
     for (let i = 0; i < byteCharacters.length; i++) {
       byteNumbers[i] = byteCharacters.charCodeAt(i);
     }
     const byteArray = new Uint8Array(byteNumbers);
-    const imageBlob = new Blob([byteArray], { type: mimeType });
+    const imageBlob = new Blob([byteArray], { type: 'image/png' });
 
     return {
       success: true,
@@ -146,7 +143,7 @@ export const generateInfographicImage = async (
     };
 
   } catch (error) {
-    console.error('Gemini 인포그래픽 생성 실패:', error);
+    console.error('Imagen 3 인포그래픽 생성 실패:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.'
@@ -163,20 +160,23 @@ export const validateGeminiApiKey = async (): Promise<boolean> => {
   }
 
   try {
-    // 간단한 텍스트 생성으로 API 키 검증
+    // 간단한 이미지 생성 테스트
     const response = await fetch(
-      `${GEMINI_API_BASE}/${IMAGE_MODEL}:generateContent?key=${apiKey}`,
+      `${GEMINI_API_BASE}/${IMAGEN_MODEL}:generateImages?key=${apiKey}`,
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          contents: [{
-            parts: [{
-              text: 'Hello'
-            }]
-          }]
+          instances: [
+            {
+              prompt: 'A simple blue square'
+            }
+          ],
+          parameters: {
+            sampleCount: 1
+          }
         })
       }
     );
