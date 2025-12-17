@@ -1,4 +1,4 @@
-// Gemini 3 Pro Image API 서비스 - 인포그래픽 이미지 생성 (서버리스 함수 경유)
+// Gemini 2.0 Flash Exp Image Generation API 서비스 - 인포그래픽 이미지 생성 (서버리스 함수 경유)
 import { FinalReportData } from '../types';
 
 // 보고서 데이터를 기반으로 인포그래픽 생성 프롬프트 생성
@@ -76,7 +76,7 @@ export const generateInfographicImage = async (
     };
 
   } catch (error) {
-    console.error('Gemini 3 Pro Image 인포그래픽 생성 실패:', error);
+    console.error('Gemini 이미지 생성 실패:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.'

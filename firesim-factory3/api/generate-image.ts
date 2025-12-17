@@ -52,7 +52,8 @@ export default async function handler(request: Request) {
     }
 
     const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
-    const IMAGE_MODEL = 'gemini-3-pro-image-preview';
+    // Gemini 2.0 Flash Experimental - 네이티브 이미지 생성 지원
+    const IMAGE_MODEL = 'gemini-2.0-flash-exp-image-generation';
 
     const response = await fetch(
       `${GEMINI_API_BASE}/${IMAGE_MODEL}:generateContent?key=${apiKey}`,
@@ -72,7 +73,8 @@ export default async function handler(request: Request) {
             }
           ],
           generationConfig: {
-            responseModalities: ['Text', 'Image']
+            responseModalities: ['IMAGE'],
+            responseMimeType: 'image/png'
           }
         })
       }
