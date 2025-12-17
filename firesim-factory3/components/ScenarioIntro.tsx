@@ -4,11 +4,12 @@ import { ArrowRight, Volume2, Siren, FileText } from 'lucide-react';
 
 interface Props {
   onNext: () => void;
+  onGoToReport: () => void;
   onShowInfoCard: () => void;
   teamId?: number;
 }
 
-const ScenarioIntro: React.FC<Props> = ({ onNext, onShowInfoCard, teamId }) => {
+const ScenarioIntro: React.FC<Props> = ({ onNext, onGoToReport, onShowInfoCard, teamId }) => {
   
   // Audio effect remains same
   useEffect(() => {
@@ -138,11 +139,11 @@ const ScenarioIntro: React.FC<Props> = ({ onNext, onShowInfoCard, teamId }) => {
 
       {/* Sticky Bottom Button Container */}
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t-2 border-black md:absolute z-30">
-        <button 
-          onClick={onNext}
+        <button
+          onClick={onGoToReport}
           className="w-full bg-[#4f46e5] text-white text-lg font-black py-4 border-2 border-black shadow-[4px_4px_0px_0px_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_#000] active:shadow-none transition-all flex items-center justify-center gap-2 uppercase tracking-wide"
         >
-          START SIMULATION
+          GOAL: 보고서 작성
           <ArrowRight className="w-6 h-6" />
         </button>
       </div>
