@@ -1,35 +1,49 @@
-// Vercel Edge Function - Gemini 3 Pro Image Preview API
+// Vercel Serverless Function (Node.js) - Gemini 3 Pro Image Preview API
+// Node.js runtime allows longer execution time (up to 300s on Pro plan)
+
 export const config = {
-  runtime: 'edge',
-  maxDuration: 60,
+  maxDuration: 120, // 120초 타임아웃 (Pro plan)
 };
 
-export default async function handler(request: Request) {
-  if (request.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-      status: 405,
-      headers: { 'Content-Type': 'application/json' },
-    });
+interface GeminiResponse {
+  candidates?: Array<{
+    content?: {
+      parts?: Array<{
+        text?: string;
+        inlineData?: {
+          mimeType: string;
+          data: string;
+        };
+      }>;
+    };
+  }>;
+  error?: {
+    message: string;
+    code: number;
+  };
+}
+
+export default async function handler(req: any, res: any) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 55000); // 55초 타임아웃
-
   try {
-    const { prompt } = await request.json();
+    const { prompt } = req.body;
 
     if (!prompt) {
-      clearTimeout(timeoutId);
-      return jsonResponse({ error: 'Prompt is required' }, 400);
+      return res.status(400).json({ error: 'Prompt is required' });
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      clearTimeout(timeoutId);
-      return jsonResponse({ error: 'API key not configured' }, 500);
+      return res.status(500).json({ error: 'API key not configured' });
     }
 
     // Gemini 3 Pro Image Preview API 호출
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 110000); // 110초
+
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image-preview:generateContent?key=${apiKey}`,
       {
@@ -39,10 +53,6 @@ export default async function handler(request: Request) {
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
             responseModalities: ['TEXT', 'IMAGE'],
-            imageConfig: {
-              aspectRatio: '3:4',
-              imageSize: '2K'
-            }
           }
         }),
         signal: controller.signal
@@ -63,24 +73,17 @@ export default async function handler(request: Request) {
           errorMessage = errorJson.error.message;
         }
       } catch {
-        // JSON 파싱 실패 시 기본 메시지 사용
+        // ignore parse error
       }
 
-      return jsonResponse({ error: errorMessage }, response.status);
+      return res.status(response.status).json({ error: errorMessage });
     }
 
     // 성공 응답 파싱
-    const responseText = await response.text();
-    let data;
-    try {
-      data = JSON.parse(responseText);
-    } catch {
-      console.error('JSON parse error:', responseText.substring(0, 500));
-      return jsonResponse({ error: '응답 파싱 실패' }, 500);
-    }
+    const data: GeminiResponse = await response.json();
 
     if (data.error) {
-      return jsonResponse({ error: data.error.message }, 400);
+      return res.status(400).json({ error: data.error.message });
     }
 
     // 이미지 데이터 추출
@@ -101,32 +104,24 @@ export default async function handler(request: Request) {
 
     if (!imageData) {
       console.error('No image in response:', JSON.stringify(data).substring(0, 500));
-      return jsonResponse({ error: '이미지 생성 결과가 없습니다.' }, 500);
+      return res.status(500).json({ error: '이미지 생성 결과가 없습니다.' });
     }
 
-    return jsonResponse({
+    return res.status(200).json({
       success: true,
       imageBase64: imageData.base64,
       mimeType: imageData.mimeType
-    }, 200);
+    });
 
-  } catch (error) {
-    clearTimeout(timeoutId);
+  } catch (error: any) {
     console.error('Server error:', error);
 
-    if (error instanceof Error && error.name === 'AbortError') {
-      return jsonResponse({ error: '이미지 생성 시간이 초과되었습니다.' }, 504);
+    if (error.name === 'AbortError') {
+      return res.status(504).json({ error: '이미지 생성 시간이 초과되었습니다.' });
     }
 
-    return jsonResponse({
-      error: error instanceof Error ? error.message : '알 수 없는 오류'
-    }, 500);
+    return res.status(500).json({
+      error: error.message || '알 수 없는 오류'
+    });
   }
-}
-
-function jsonResponse(data: object, status: number) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
 }
