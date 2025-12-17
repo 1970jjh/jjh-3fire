@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { SimulationState, FinalReportData } from '../types';
-import { Lock, FileText, Download, CheckCircle, Home, Loader2, CloudUpload } from 'lucide-react';
-import { submitReport } from '../services/firestore';
+import { Lock, FileText, Download, CheckCircle, Home, Loader2, CloudUpload, Image } from 'lucide-react';
+import { submitReport, uploadReportImage, updateReportImageUrl } from '../services/firestore';
 
 interface Props {
   data: SimulationState;
@@ -15,19 +15,21 @@ const StepFiveReport: React.FC<Props> = ({ data, sessionId, onRestart, isReportE
   const [isEditing, setIsEditing] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
   const reportRef = useRef<HTMLDivElement>(null);
 
-  // Initialize form with previous step data
+  // Initialize form with empty values - students fill everything
   const [formData, setFormData] = useState<FinalReportData>({
-    title: `${data.teamName} 화재사고 분석 보고서`,
-    members: data.user?.name || '',
-    contents: '1. 개요\n2. 현상 파악\n3. 원인 분석\n4. 해결 방안',
-    situation: data.gapAnalysis.current,
-    definition: data.gapAnalysis.ideal,
-    cause: '전력 과부하, 소화기 미작동, 관리 소홀',
-    solution: data.solutions.shortTerm,
-    prevention: data.solutions.prevention,
-    schedule: '즉시: 소화기 교체\n1주 내: 안전 교육\n1달 내: 설비 증설'
+    title: '',
+    members: '',
+    contents: '',
+    situation: '',
+    definition: '',
+    cause: '',
+    solution: '',
+    prevention: '',
+    schedule: ''
   });
 
   const handleInputChange = (field: keyof FinalReportData, value: string) => {
@@ -60,6 +62,64 @@ const StepFiveReport: React.FC<Props> = ({ data, sessionId, onRestart, isReportE
       alert('보고서 제출에 실패했습니다. 다시 시도해주세요.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // PNG 이미지 생성 및 Firebase Storage 업로드
+  const handleGenerateAndUpload = async () => {
+    if (!reportRef.current) return;
+
+    setIsGeneratingImage(true);
+
+    try {
+      // @ts-ignore
+      const html2canvas = window.html2canvas;
+      if (!html2canvas) {
+        alert("이미지 생성 라이브러리를 불러오는 중입니다. 잠시 후 다시 시도해주세요.");
+        setIsGeneratingImage(false);
+        return;
+      }
+
+      // PNG 생성
+      const canvas = await html2canvas(reportRef.current, {
+        scale: 2,
+        backgroundColor: "#ffffff",
+        useCORS: true
+      });
+
+      // Canvas를 Blob으로 변환
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((b: Blob | null) => {
+          if (b) resolve(b);
+          else reject(new Error("Failed to create blob"));
+        }, 'image/png');
+      });
+
+      // Firebase Storage에 업로드
+      const imageUrl = await uploadReportImage(
+        sessionId,
+        data.user?.teamId || 0,
+        data.user?.name || '',
+        blob
+      );
+
+      // Firestore에 이미지 URL 저장을 위해 보고서 다시 제출
+      await submitReport({
+        sessionId: sessionId,
+        teamId: data.user?.teamId || 0,
+        userName: data.user?.name || '',
+        report: formData,
+        reportImageUrl: imageUrl,
+        submittedAt: Date.now()
+      });
+
+      setUploadedImageUrl(imageUrl);
+      alert('보고서 이미지가 생성되어 저장되었습니다!');
+    } catch (err) {
+      console.error("이미지 생성/업로드 실패:", err);
+      alert("이미지 생성 또는 업로드 중 오류가 발생했습니다.");
+    } finally {
+      setIsGeneratingImage(false);
     }
   };
 
@@ -260,20 +320,55 @@ const StepFiveReport: React.FC<Props> = ({ data, sessionId, onRestart, isReportE
             </div>
         </div>
 
+        {/* Uploaded Image Success Message */}
+        {uploadedImageUrl && (
+          <div className="bg-blue-100 border-2 border-blue-600 p-4 flex items-center gap-3">
+            <Image className="w-6 h-6 text-blue-600" />
+            <div>
+              <p className="font-black text-blue-800">이미지가 서버에 저장되었습니다!</p>
+              <p className="text-sm text-blue-700">관리자가 동일한 이미지를 다운로드할 수 있습니다.</p>
+            </div>
+          </div>
+        )}
+
         {/* Action Buttons */}
-        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t-2 border-black md:absolute z-30 flex gap-3">
+        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t-2 border-black md:absolute z-30 flex flex-col gap-2">
+            <div className="flex gap-2">
+              <button
+                  onClick={() => setIsEditing(true)}
+                  className="flex-1 bg-white border-2 border-black text-black font-black py-3 shadow-[4px_4px_0px_0px_#000] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[3px_3px_0px_0px_#000] text-sm"
+              >
+                  EDIT
+              </button>
+              <button
+                  onClick={handleDownload}
+                  className="flex-1 bg-gray-100 border-2 border-black text-black font-black py-3 shadow-[4px_4px_0px_0px_#000] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[3px_3px_0px_0px_#000] flex items-center justify-center gap-1 text-sm"
+              >
+                  <Download className="w-4 h-4" />
+                  내 기기 저장
+              </button>
+            </div>
             <button
-                onClick={() => setIsEditing(true)}
-                className="flex-1 bg-white border-2 border-black text-black font-black py-4 shadow-[4px_4px_0px_0px_#000] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[3px_3px_0px_0px_#000]"
+                onClick={handleGenerateAndUpload}
+                disabled={isGeneratingImage || !!uploadedImageUrl}
+                className="w-full bg-[#4f46e5] text-white font-black py-4 border-2 border-black shadow-[4px_4px_0px_0px_#71717a] hover:bg-[#4338ca] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[3px_3px_0px_0px_#71717a] flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-                EDIT
-            </button>
-            <button
-                onClick={handleDownload}
-                className="flex-[2] bg-black text-white font-black py-4 border-2 border-black shadow-[4px_4px_0px_0px_#71717a] hover:bg-gray-800 hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[3px_3px_0px_0px_#71717a] flex items-center justify-center gap-2"
-            >
-                <Download className="w-5 h-5" />
-                DOWNLOAD PNG
+                {isGeneratingImage ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    이미지 생성 중...
+                  </>
+                ) : uploadedImageUrl ? (
+                  <>
+                    <CheckCircle className="w-5 h-5" />
+                    서버 저장 완료
+                  </>
+                ) : (
+                  <>
+                    <CloudUpload className="w-5 h-5" />
+                    서버에 이미지 저장 (관리자 공유)
+                  </>
+                )}
             </button>
         </div>
     </div>

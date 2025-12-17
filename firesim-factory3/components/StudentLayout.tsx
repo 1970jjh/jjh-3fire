@@ -19,14 +19,18 @@ interface Props {
   onLogout: () => void;
   isAdmin?: boolean;
   isReportEnabled: boolean; // Prop for report submission control
+  // 타이머 관련 props
+  timerEndTime?: number | null;
+  isTimerRunning?: boolean;
 }
 
-const StudentLayout: React.FC<Props> = ({ gameState, setGameState, totalTeams, sessionId, onLogout, isAdmin = false, isReportEnabled }) => {
+const StudentLayout: React.FC<Props> = ({ gameState, setGameState, totalTeams, sessionId, onLogout, isAdmin = false, isReportEnabled, timerEndTime, isTimerRunning }) => {
   const [showGuide, setShowGuide] = useState(false);
   const [showInfoCard, setShowInfoCard] = useState(false);
-  
+  const [remainingTime, setRemainingTime] = useState<string>('--:--');
+
   const currentStepIndex = STEPS.findIndex(s => s.id === gameState.currentStep);
-  const totalSteps = STEPS.length - 1; 
+  const totalSteps = STEPS.length - 1;
   const progress = Math.max(0, (currentStepIndex / totalSteps) * 100);
 
   useEffect(() => {
@@ -36,6 +40,30 @@ const StudentLayout: React.FC<Props> = ({ gameState, setGameState, totalTeams, s
       setShowGuide(false);
     }
   }, [gameState.currentStep]);
+
+  // 타이머 카운트다운 로직
+  useEffect(() => {
+    const updateTimer = () => {
+      if (isTimerRunning && timerEndTime) {
+        const now = Date.now();
+        const diff = timerEndTime - now;
+
+        if (diff <= 0) {
+          setRemainingTime('00:00');
+        } else {
+          const minutes = Math.floor(diff / 60000);
+          const seconds = Math.floor((diff % 60000) / 1000);
+          setRemainingTime(`${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
+        }
+      } else {
+        setRemainingTime('--:--');
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [isTimerRunning, timerEndTime]);
 
   const advanceStep = (nextStep: SimulationStep, dataUpdates?: Partial<SimulationState>) => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -111,14 +139,20 @@ const StudentLayout: React.FC<Props> = ({ gameState, setGameState, totalTeams, s
             </div>
         </div>
         <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 text-red-600 font-mono font-bold bg-red-100 px-2 py-1 border-2 border-black text-sm shadow-[2px_2px_0px_0px_#000]">
-                <Clock className="w-3 h-3" />
-                <span>59:21</span>
-            </div>
-            
+            {isTimerRunning && (
+              <div className={`flex items-center gap-1 font-mono font-bold px-2 py-1 border-2 border-black text-sm shadow-[2px_2px_0px_0px_#000] ${
+                remainingTime !== '--:--' && parseInt(remainingTime.split(':')[0]) < 5
+                  ? 'text-red-600 bg-red-100 animate-pulse'
+                  : 'text-slate-700 bg-slate-100'
+              }`}>
+                  <Clock className="w-3 h-3" />
+                  <span>{remainingTime}</span>
+              </div>
+            )}
+
             {isAdmin && (
-                <button 
-                    onClick={onLogout} 
+                <button
+                    onClick={onLogout}
                     className="text-gray-400 hover:text-black transition-colors p-1"
                     title="관리자 모드 전환"
                 >
