@@ -90,18 +90,6 @@ const AdminDashboard: React.FC<Props> = ({ currentSession, onToggleReport, onLog
     });
   };
 
-  // 보고서를 JSON으로 다운로드
-  const downloadReportAsJSON = (report: ReportData) => {
-    const dataStr = JSON.stringify(report, null, 2);
-    const blob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.download = `${report.teamId}조_${report.userName}_보고서.json`;
-    link.href = url;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
-
   // 모든 보고서를 CSV로 다운로드
   const downloadAllReportsAsCSV = () => {
     if (reports.length === 0) {
@@ -341,49 +329,50 @@ const AdminDashboard: React.FC<Props> = ({ currentSession, onToggleReport, onLog
                           )}
 
                           <div className="flex flex-col gap-2 mt-4 pt-4 border-t">
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => setSelectedReport(report)}
-                                className="flex-1 bg-blue-600 text-white py-2 rounded font-bold text-sm hover:bg-blue-700 flex items-center justify-center gap-1"
-                              >
-                                <Eye className="w-4 h-4" />
-                                전체 보기
-                              </button>
-                              <button
-                                onClick={() => downloadReportAsJSON(report)}
-                                className="flex-1 bg-slate-200 text-slate-700 py-2 rounded font-bold text-sm hover:bg-slate-300 flex items-center justify-center gap-1"
-                              >
-                                <Download className="w-4 h-4" />
-                                JSON
-                              </button>
-                            </div>
-                            {/* AI 보고서 (인포그래픽) 다운로드 */}
+                            {/* AI 보고서 미리보기 */}
                             {report.aiReportImageUrl ? (
-                              <a
-                                href={report.aiReportImageUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-2 rounded font-bold text-sm hover:from-purple-700 hover:to-pink-700 flex items-center justify-center gap-1"
-                              >
-                                <Image className="w-4 h-4" />
-                                AI 보고서 다운로드
-                              </a>
-                            ) : report.reportImageUrl ? (
-                              <a
-                                href={report.reportImageUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                download={`${report.teamId}조_${report.userName}_보고서.png`}
-                                className="w-full bg-purple-600 text-white py-2 rounded font-bold text-sm hover:bg-purple-700 flex items-center justify-center gap-1"
-                              >
-                                <Image className="w-4 h-4" />
-                                PNG 이미지 다운로드
-                              </a>
+                              <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-3 rounded-lg border border-purple-200">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-xs font-bold text-purple-600 flex items-center gap-1">
+                                    <Image className="w-3 h-3" />
+                                    AI 보고서
+                                    {report.aiReportSubmittedBy && (
+                                      <span className="font-normal text-purple-500">
+                                        ({report.aiReportSubmittedBy})
+                                      </span>
+                                    )}
+                                  </span>
+                                </div>
+                                <img
+                                  src={report.aiReportImageUrl}
+                                  alt="AI 보고서 미리보기"
+                                  className="w-full rounded border border-purple-300 mb-2"
+                                />
+                                <a
+                                  href={report.aiReportImageUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-2 rounded font-bold text-sm hover:from-purple-700 hover:to-pink-700 flex items-center justify-center gap-1"
+                                >
+                                  <Download className="w-4 h-4" />
+                                  AI 보고서 다운로드
+                                </a>
+                              </div>
                             ) : (
-                              <div className="w-full bg-gray-100 text-gray-400 py-2 rounded text-sm text-center italic">
+                              <div className="w-full bg-gray-100 text-gray-400 py-3 rounded text-sm text-center italic border border-dashed border-gray-300">
+                                <Image className="w-5 h-5 mx-auto mb-1 opacity-50" />
                                 AI 보고서 미제출
                               </div>
                             )}
+
+                            {/* 전체 보기 버튼 */}
+                            <button
+                              onClick={() => setSelectedReport(report)}
+                              className="w-full bg-blue-600 text-white py-2 rounded font-bold text-sm hover:bg-blue-700 flex items-center justify-center gap-1"
+                            >
+                              <Eye className="w-4 h-4" />
+                              전체 보기
+                            </button>
                           </div>
                       </div>
                   </div>
