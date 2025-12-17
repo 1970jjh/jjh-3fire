@@ -1,35 +1,34 @@
-// Gemini 3 Pro Image Preview API 서비스 - 인포그래픽 이미지 생성 (서버리스 함수 경유)
+// Gemini 3 Pro Image Preview - 벤토그리드 인포그래픽 생성
 import { FinalReportData } from '../types';
 
-// 보고서 데이터를 기반으로 인포그래픽 생성 프롬프트 생성
+// 학습자 보고서를 벤토그리드 인포그래픽으로 변환하는 프롬프트
 const createInfographicPrompt = (report: FinalReportData, teamName: string): string => {
-  return `Create a professional business infographic report image.
+  return `Generate a BENTO GRID style infographic image for a factory fire incident report.
 
-REPORT INFORMATION:
+REPORT DATA:
 - Title: ${report.title}
 - Team: ${teamName}
 - Members: ${report.members}
 
-CONTENT SECTIONS:
-1. SITUATION (Facts): ${report.situation}
-2. PROBLEM (Gap Analysis): ${report.definition}
-3. ROOT CAUSE: ${report.cause}
-4. SOLUTIONS: ${report.solution}
-5. PREVENTION: ${report.prevention}
-6. SCHEDULE: ${report.schedule}
+SECTIONS TO VISUALIZE:
+1. 현상파악 (Situation): ${report.situation}
+2. 문제정의 (Problem): ${report.definition}
+3. 원인분석 (Root Cause): ${report.cause}
+4. 해결방안 (Solution): ${report.solution}
+5. 재발방지 (Prevention): ${report.prevention}
+6. 실행일정 (Schedule): ${report.schedule}
 
-DESIGN REQUIREMENTS:
-- Professional business infographic style
-- 16:9 landscape layout
-- Bento grid layout with distinct colored sections
-- Color scheme: Yellow (#fbbf24), Indigo (#4f46e5), White, Black
-- Bold neo-brutalist style with thick borders
-- Icons for each section
-- Clean typography hierarchy
-- Executive presentation quality`;
+DESIGN STYLE:
+- Modern BENTO GRID layout (asymmetric grid boxes)
+- Color palette: Yellow (#FFC107), Black (#1a1a1a), White, Gray
+- Bold headings with thick black borders
+- Clean sans-serif Korean typography
+- Professional business report aesthetic
+- Include simple icons for each section
+- A4 portrait format (3:4 ratio)`;
 };
 
-// 서버리스 함수를 통해 Imagen 4 API 호출
+// Gemini 3 Pro Image로 인포그래픽 생성
 export const generateInfographicImage = async (
   report: FinalReportData,
   teamName: string
@@ -39,103 +38,50 @@ export const generateInfographicImage = async (
   try {
     const response = await fetch('/api/generate-image', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt })
     });
 
-    // 1. 먼저 응답 텍스트를 가져옴
     const responseText = await response.text();
 
-    // 2. response.ok 먼저 확인
+    // 에러 응답 처리
     if (!response.ok) {
-      // 타임아웃이나 서버 에러인 경우
       let errorMessage = `서버 오류 (${response.status})`;
-
-      // JSON인지 확인 후 파싱 시도
       try {
         const errorData = JSON.parse(responseText);
-        if (errorData.error) {
-          errorMessage = errorData.error;
-        }
+        if (errorData.error) errorMessage = errorData.error;
       } catch {
-        // JSON이 아닌 경우 (Vercel 타임아웃 등)
         if (response.status === 504) {
           errorMessage = '이미지 생성 시간이 초과되었습니다. 다시 시도해주세요.';
-        } else if (responseText) {
-          errorMessage = responseText.substring(0, 100);
         }
       }
-
-      return {
-        success: false,
-        error: errorMessage
-      };
+      return { success: false, error: errorMessage };
     }
 
-    // 3. 성공 응답을 JSON으로 파싱
+    // 성공 응답 파싱
     let data;
     try {
       data = JSON.parse(responseText);
     } catch {
-      return {
-        success: false,
-        error: '서버 응답을 처리할 수 없습니다.'
-      };
-    }
-
-    if (data.error) {
-      return {
-        success: false,
-        error: data.error
-      };
+      return { success: false, error: '서버 응답을 처리할 수 없습니다.' };
     }
 
     if (!data.success || !data.imageBase64) {
-      return {
-        success: false,
-        error: '이미지 생성에 실패했습니다. 다시 시도해주세요.'
-      };
+      return { success: false, error: data.error || '이미지 생성에 실패했습니다.' };
     }
 
-    // Base64를 Blob으로 변환
+    // Base64 → Blob 변환
     const byteCharacters = atob(data.imageBase64);
-    const byteNumbers = new Array(byteCharacters.length);
+    const byteArray = new Uint8Array(byteCharacters.length);
     for (let i = 0; i < byteCharacters.length; i++) {
-      byteNumbers[i] = byteCharacters.charCodeAt(i);
+      byteArray[i] = byteCharacters.charCodeAt(i);
     }
-    const byteArray = new Uint8Array(byteNumbers);
     const imageBlob = new Blob([byteArray], { type: data.mimeType || 'image/png' });
 
-    return {
-      success: true,
-      imageBlob
-    };
+    return { success: true, imageBlob };
 
   } catch (error) {
-    console.error('Gemini 이미지 생성 실패:', error);
-    return {
-      success: false,
-      error: '네트워크 오류가 발생했습니다. 다시 시도해주세요.'
-    };
-  }
-};
-
-// API 키 유효성 검사 (서버리스 함수 상태 확인)
-export const validateGeminiApiKey = async (): Promise<boolean> => {
-  try {
-    const response = await fetch('/api/generate-image', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ prompt: 'test' })
-    });
-
-    // 400 에러가 아니면 API 키가 설정된 것으로 간주
-    return response.status !== 500;
-  } catch {
-    return false;
+    console.error('인포그래픽 생성 실패:', error);
+    return { success: false, error: '네트워크 오류가 발생했습니다.' };
   }
 };
