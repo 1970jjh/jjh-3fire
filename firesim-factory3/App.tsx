@@ -280,6 +280,7 @@ export default function App() {
       setGameState={setGameState}
       totalTeams={currentSession.totalTeams}
       sessionId={currentSession.id}
+      groupName={currentSession.groupName}
       onLogout={handleModeSwitch}
       isAdmin={isAdmin}
       isReportEnabled={currentSession.isReportEnabled}

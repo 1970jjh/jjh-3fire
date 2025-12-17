@@ -16,6 +16,7 @@ interface Props {
   setGameState: React.Dispatch<React.SetStateAction<SimulationState>>;
   totalTeams: number;
   sessionId: string;
+  groupName: string; // 교육 그룹명
   onLogout: () => void;
   isAdmin?: boolean;
   isReportEnabled: boolean; // Prop for report submission control
@@ -24,7 +25,7 @@ interface Props {
   isTimerRunning?: boolean;
 }
 
-const StudentLayout: React.FC<Props> = ({ gameState, setGameState, totalTeams, sessionId, onLogout, isAdmin = false, isReportEnabled, timerEndTime, isTimerRunning }) => {
+const StudentLayout: React.FC<Props> = ({ gameState, setGameState, totalTeams, sessionId, groupName, onLogout, isAdmin = false, isReportEnabled, timerEndTime, isTimerRunning }) => {
   const [showGuide, setShowGuide] = useState(false);
   const [showInfoCard, setShowInfoCard] = useState(false);
   const [remainingTime, setRemainingTime] = useState<string>('--:--');
@@ -206,6 +207,7 @@ const StudentLayout: React.FC<Props> = ({ gameState, setGameState, totalTeams, s
             <StepFiveReport
                 data={gameState}
                 sessionId={sessionId}
+                groupName={groupName}
                 onRestart={onLogout}
                 isReportEnabled={isReportEnabled}
                 onUpdateReport={(reportData) => setGameState(prev => ({...prev, finalReport: reportData}))}

@@ -227,3 +227,101 @@ export const updateReportImageUrl = async (
     updatedAt: Timestamp.now()
   });
 };
+
+// ============ AI 보고서 관리 ============
+
+// 팀의 AI 보고서 제출 여부 확인
+export const checkTeamAIReportSubmitted = async (
+  sessionId: string,
+  teamId: number
+): Promise<boolean> => {
+  const reportsRef = collection(db, 'reports');
+  const q = query(
+    reportsRef,
+    where('sessionId', '==', sessionId),
+    where('teamId', '==', teamId),
+    where('aiReportSubmitted', '==', true)
+  );
+  const snapshot = await getDocs(q);
+  return !snapshot.empty;
+};
+
+// 팀 AI 보고서 제출 상태 실시간 구독
+export const subscribeToTeamAIReportStatus = (
+  sessionId: string,
+  teamId: number,
+  callback: (submitted: boolean) => void
+): Unsubscribe => {
+  const reportsRef = collection(db, 'reports');
+  const q = query(
+    reportsRef,
+    where('sessionId', '==', sessionId),
+    where('teamId', '==', teamId)
+  );
+
+  return onSnapshot(q, (snapshot) => {
+    const hasSubmitted = snapshot.docs.some(doc => doc.data().aiReportSubmitted === true);
+    callback(hasSubmitted);
+  });
+};
+
+// AI 보고서 이미지 업로드 (파일명: 교육그룹명_#조_년월일.png)
+export const uploadAIReportImage = async (
+  sessionId: string,
+  groupName: string,
+  teamId: number,
+  imageBlob: Blob
+): Promise<string> => {
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+  const fileName = `ai-reports/${sessionId}/${groupName}_${teamId}조_${dateStr}.png`;
+  const storageRef = ref(storage, fileName);
+
+  await uploadBytes(storageRef, imageBlob);
+  const downloadURL = await getDownloadURL(storageRef);
+
+  return downloadURL;
+};
+
+// AI 보고서 최종 제출
+export const submitAIReport = async (
+  sessionId: string,
+  teamId: number,
+  userName: string,
+  aiReportImageUrl: string,
+  report: any
+): Promise<void> => {
+  const reportsRef = collection(db, 'reports');
+
+  // 해당 팀의 기존 보고서 찾기
+  const q = query(
+    reportsRef,
+    where('sessionId', '==', sessionId),
+    where('teamId', '==', teamId)
+  );
+  const existing = await getDocs(q);
+
+  const aiReportData = {
+    aiReportImageUrl,
+    aiReportSubmitted: true,
+    aiReportSubmittedAt: Date.now(),
+    aiReportSubmittedBy: userName,
+    updatedAt: Timestamp.now()
+  };
+
+  if (!existing.empty) {
+    // 기존 보고서 업데이트
+    const docRef = existing.docs[0].ref;
+    await updateDoc(docRef, aiReportData);
+  } else {
+    // 새 보고서 생성 (AI 보고서만 있는 경우)
+    await addDoc(reportsRef, {
+      sessionId,
+      teamId,
+      userName,
+      report,
+      ...aiReportData,
+      createdAt: Timestamp.now()
+    });
+  }
+};

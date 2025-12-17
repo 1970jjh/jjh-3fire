@@ -103,6 +103,10 @@ export interface ReportData {
   userName: string;
   report: FinalReportData;
   reportImageUrl?: string; // Firebase Storage에 저장된 PNG 이미지 URL
+  aiReportImageUrl?: string; // AI 생성 인포그래픽 이미지 URL
+  aiReportSubmitted?: boolean; // AI 보고서 최종 제출 여부
+  aiReportSubmittedAt?: number; // AI 보고서 제출 시간
+  aiReportSubmittedBy?: string; // AI 보고서 제출한 사람
   submittedAt?: number;
   createdAt?: any;
   updatedAt?: any;
