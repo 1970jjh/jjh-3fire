@@ -1,7 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { SimulationState, FinalReportData } from '../types';
-import { Lock, FileText, Download, CheckCircle, Home, Loader2, CloudUpload, Image } from 'lucide-react';
+import { Lock, FileText, Download, CheckCircle, Home, Loader2, CloudUpload, Image, Sparkles, AlertCircle } from 'lucide-react';
 import { submitReport, uploadReportImage, updateReportImageUrl } from '../services/firestore';
+import { generateInfographicImage } from '../services/gemini';
 
 interface Props {
   data: SimulationState;
@@ -17,6 +18,9 @@ const StepFiveReport: React.FC<Props> = ({ data, sessionId, onRestart, isReportE
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [aiInfographicUrl, setAiInfographicUrl] = useState<string | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
   const reportRef = useRef<HTMLDivElement>(null);
 
   // Initialize form with empty values - students fill everything
@@ -147,6 +151,47 @@ const StepFiveReport: React.FC<Props> = ({ data, sessionId, onRestart, isReportE
     } catch (err) {
         console.error("Report generation failed", err);
         alert("이미지 저장 중 오류가 발생했습니다.");
+    }
+  };
+
+  // Gemini AI를 사용하여 인포그래픽 이미지 생성
+  const handleGenerateAIInfographic = async () => {
+    setIsGeneratingAI(true);
+    setAiError(null);
+
+    try {
+      const result = await generateInfographicImage(formData, data.teamName);
+
+      if (!result.success || !result.imageBlob) {
+        setAiError(result.error || '인포그래픽 생성에 실패했습니다.');
+        return;
+      }
+
+      // Firebase Storage에 업로드
+      const imageUrl = await uploadReportImage(
+        sessionId,
+        data.user?.teamId || 0,
+        `${data.user?.name || ''}_AI`,
+        result.imageBlob
+      );
+
+      // Firestore에 AI 이미지 URL 저장
+      await submitReport({
+        sessionId: sessionId,
+        teamId: data.user?.teamId || 0,
+        userName: data.user?.name || '',
+        report: formData,
+        reportImageUrl: imageUrl,
+        submittedAt: Date.now()
+      });
+
+      setAiInfographicUrl(imageUrl);
+      alert('AI 인포그래픽이 생성되어 저장되었습니다!');
+    } catch (err) {
+      console.error('AI 인포그래픽 생성 실패:', err);
+      setAiError(err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.');
+    } finally {
+      setIsGeneratingAI(false);
     }
   };
 
@@ -331,6 +376,40 @@ const StepFiveReport: React.FC<Props> = ({ data, sessionId, onRestart, isReportE
           </div>
         )}
 
+        {/* AI Infographic Section */}
+        {aiInfographicUrl && (
+          <div className="bg-gradient-to-r from-purple-100 to-pink-100 border-2 border-purple-600 p-4 rounded-lg">
+            <div className="flex items-center gap-2 mb-3">
+              <Sparkles className="w-6 h-6 text-purple-600" />
+              <p className="font-black text-purple-800">AI 인포그래픽이 생성되었습니다!</p>
+            </div>
+            <img
+              src={aiInfographicUrl}
+              alt="AI 생성 인포그래픽"
+              className="w-full border-2 border-black shadow-[4px_4px_0px_0px_#000]"
+            />
+            <a
+              href={aiInfographicUrl}
+              download={`${data.teamName}_AI_Infographic.png`}
+              className="mt-3 inline-flex items-center gap-2 bg-purple-600 text-white font-bold px-4 py-2 border-2 border-black hover:bg-purple-700"
+            >
+              <Download className="w-4 h-4" />
+              AI 인포그래픽 다운로드
+            </a>
+          </div>
+        )}
+
+        {/* AI Error Message */}
+        {aiError && (
+          <div className="bg-red-100 border-2 border-red-600 p-4 flex items-center gap-3">
+            <AlertCircle className="w-6 h-6 text-red-600" />
+            <div>
+              <p className="font-black text-red-800">AI 인포그래픽 생성 실패</p>
+              <p className="text-sm text-red-700">{aiError}</p>
+            </div>
+          </div>
+        )}
+
         {/* Action Buttons */}
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t-2 border-black md:absolute z-30 flex flex-col gap-2">
             <div className="flex gap-2">
@@ -367,6 +446,29 @@ const StepFiveReport: React.FC<Props> = ({ data, sessionId, onRestart, isReportE
                   <>
                     <CloudUpload className="w-5 h-5" />
                     서버에 이미지 저장 (관리자 공유)
+                  </>
+                )}
+            </button>
+            {/* AI 인포그래픽 생성 버튼 */}
+            <button
+                onClick={handleGenerateAIInfographic}
+                disabled={isGeneratingAI || !!aiInfographicUrl}
+                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-black py-4 border-2 border-black shadow-[4px_4px_0px_0px_#71717a] hover:from-purple-700 hover:to-pink-700 hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[3px_3px_0px_0px_#71717a] flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+                {isGeneratingAI ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    AI 인포그래픽 생성 중... (약 30초 소요)
+                  </>
+                ) : aiInfographicUrl ? (
+                  <>
+                    <CheckCircle className="w-5 h-5" />
+                    AI 인포그래픽 생성 완료
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-5 h-5" />
+                    AI 인포그래픽 생성 (Gemini)
                   </>
                 )}
             </button>
