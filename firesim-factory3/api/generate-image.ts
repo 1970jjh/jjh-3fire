@@ -1,9 +1,7 @@
-// Vercel Serverless Function for Gemini 3 Pro Image API
-// This bypasses CORS by calling the API from server-side
+// api/generate-image.ts
 
 export const config = {
   runtime: 'edge',
-  // Edge function 최대 실행 시간 설정
   maxDuration: 60,
 };
 
@@ -26,7 +24,6 @@ interface GeminiResponse {
 }
 
 export default async function handler(request: Request) {
-  // Only allow POST
   if (request.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
       status: 405,
@@ -34,7 +31,6 @@ export default async function handler(request: Request) {
     });
   }
 
-  // AbortController로 60초 타임아웃 설정
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 60000);
 
@@ -60,8 +56,9 @@ export default async function handler(request: Request) {
     }
 
     const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
-    // Gemini 2.0 Flash Experimental - 네이티브 이미지 생성 지원
-    const IMAGE_MODEL = 'gemini-2.0-flash-exp';
+
+    // Nano Banana Pro (Gemini 3 Pro Image) - 인포그래픽 전문 모델
+    const IMAGE_MODEL = 'gemini-3-pro-image-preview';
 
     const response = await fetch(
       `${GEMINI_API_BASE}/${IMAGE_MODEL}:generateContent?key=${apiKey}`,
@@ -81,8 +78,11 @@ export default async function handler(request: Request) {
             }
           ],
           generationConfig: {
-            // TEXT와 IMAGE 둘 다 필수!
-            responseModalities: ['TEXT', 'IMAGE']
+            responseModalities: ['TEXT', 'IMAGE'],
+            imageConfig: {
+              aspectRatio: '3:4',  // A4 세로형 (보고서용)
+              imageSize: '2K'
+            }
           }
         }),
         signal: controller.signal
@@ -91,12 +91,10 @@ export default async function handler(request: Request) {
 
     clearTimeout(timeoutId);
 
-    // 1. response.ok 먼저 확인
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Gemini API error status:', response.status, errorText);
 
-      // 에러 응답도 JSON인지 확인
       let errorMessage = `API error: ${response.status}`;
       try {
         const errorJson = JSON.parse(errorText);
@@ -104,9 +102,8 @@ export default async function handler(request: Request) {
           errorMessage = errorJson.error.message;
         }
       } catch {
-        // JSON이 아닌 경우 텍스트 그대로 사용
         if (errorText) {
-          errorMessage = errorText.substring(0, 200); // 너무 길면 자르기
+          errorMessage = errorText.substring(0, 200);
         }
       }
 
@@ -116,10 +113,8 @@ export default async function handler(request: Request) {
       });
     }
 
-    // 2. 응답 텍스트를 먼저 가져오기
     const responseText = await response.text();
 
-    // 3. JSON 파싱을 try-catch로 감싸기
     let data: GeminiResponse;
     try {
       data = JSON.parse(responseText);
@@ -133,7 +128,6 @@ export default async function handler(request: Request) {
       });
     }
 
-    // 4. API 에러 응답 확인
     if (data.error) {
       return new Response(JSON.stringify({ error: data.error.message }), {
         status: 400,
@@ -141,7 +135,6 @@ export default async function handler(request: Request) {
       });
     }
 
-    // 5. 이미지 데이터 추출
     let base64Data: string | undefined;
     let mimeType = 'image/png';
 
@@ -177,7 +170,6 @@ export default async function handler(request: Request) {
     clearTimeout(timeoutId);
     console.error('Server error:', error);
 
-    // AbortError 처리 (타임아웃)
     if (error instanceof Error && error.name === 'AbortError') {
       return new Response(JSON.stringify({
         error: '이미지 생성 시간이 초과되었습니다. 다시 시도해주세요.'
