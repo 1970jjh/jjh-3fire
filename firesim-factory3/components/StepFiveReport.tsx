@@ -157,17 +157,22 @@ const StepFiveReport: React.FC<Props> = ({ data, sessionId, groupName, onRestart
     }
 
     setIsSubmittingFinal(true);
+    console.log('AI 보고서 최종 제출 시작...');
+    console.log('Blob size:', aiInfographicBlob.size, 'bytes');
 
     try {
-      // Firebase Storage에 업로드 (파일명: 교육그룹명_#조_년월일.png)
+      // 1. Firebase Storage에 업로드
+      console.log('Firebase Storage 업로드 시작...');
       const imageUrl = await uploadAIReportImage(
         sessionId,
         groupName,
         data.user?.teamId || 0,
         aiInfographicBlob
       );
+      console.log('Firebase Storage 업로드 완료:', imageUrl);
 
-      // Firestore에 AI 보고서 제출 기록
+      // 2. Firestore에 AI 보고서 제출 기록
+      console.log('Firestore 제출 기록 시작...');
       await submitAIReport(
         sessionId,
         data.user?.teamId || 0,
@@ -175,12 +180,13 @@ const StepFiveReport: React.FC<Props> = ({ data, sessionId, groupName, onRestart
         imageUrl,
         formData
       );
+      console.log('Firestore 제출 기록 완료!');
 
       setIsFinalSubmitted(true);
       alert('AI 보고서가 최종 제출되었습니다! 관리자가 확인할 수 있습니다.');
-    } catch (err) {
+    } catch (err: any) {
       console.error('AI 보고서 최종 제출 실패:', err);
-      alert('AI 보고서 제출에 실패했습니다. 다시 시도해주세요.');
+      alert(`AI 보고서 제출 실패: ${err.message || '알 수 없는 오류'}`);
     } finally {
       setIsSubmittingFinal(false);
     }
