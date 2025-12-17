@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { SessionConfig, ReportData } from '../types';
-import { Activity, Users, Clock, FileText, CheckCircle, LogOut, RotateCcw, Lock, Unlock, Download, Eye, X, ChevronDown, ChevronUp } from 'lucide-react';
-import { subscribeToReports } from '../services/firestore';
+import { Activity, Users, FileText, CheckCircle, LogOut, RotateCcw, Lock, Unlock, Download, Eye, X, ChevronDown, ChevronUp, Image, Clock, Play, Square, RefreshCw } from 'lucide-react';
+import { subscribeToReports, updateSession } from '../services/firestore';
 
 interface Props {
   currentSession: SessionConfig;
@@ -14,6 +14,8 @@ const AdminDashboard: React.FC<Props> = ({ currentSession, onToggleReport, onLog
   const [reports, setReports] = useState<ReportData[]>([]);
   const [selectedReport, setSelectedReport] = useState<ReportData | null>(null);
   const [expandedTeams, setExpandedTeams] = useState<Set<number>>(new Set());
+  const [timerMinutes, setTimerMinutes] = useState(60); // 기본 60분
+  const [remainingTime, setRemainingTime] = useState<string>('--:--');
 
   // Firebase에서 보고서 실시간 구독
   useEffect(() => {
@@ -23,6 +25,58 @@ const AdminDashboard: React.FC<Props> = ({ currentSession, onToggleReport, onLog
 
     return () => unsubscribe();
   }, [currentSession.id]);
+
+  // 타이머 카운트다운 로직
+  useEffect(() => {
+    const updateTimer = () => {
+      if (currentSession.isTimerRunning && currentSession.timerEndTime) {
+        const now = Date.now();
+        const diff = currentSession.timerEndTime - now;
+
+        if (diff <= 0) {
+          setRemainingTime('00:00');
+          // 타이머 종료 시 자동 정지
+          updateSession(currentSession.id, { isTimerRunning: false });
+        } else {
+          const minutes = Math.floor(diff / 60000);
+          const seconds = Math.floor((diff % 60000) / 1000);
+          setRemainingTime(`${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
+        }
+      } else {
+        setRemainingTime('--:--');
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [currentSession.isTimerRunning, currentSession.timerEndTime, currentSession.id]);
+
+  // 타이머 시작
+  const handleStartTimer = async () => {
+    const endTime = Date.now() + (timerMinutes * 60 * 1000);
+    await updateSession(currentSession.id, {
+      timerEndTime: endTime,
+      timerDuration: timerMinutes,
+      isTimerRunning: true
+    });
+  };
+
+  // 타이머 정지
+  const handleStopTimer = async () => {
+    await updateSession(currentSession.id, {
+      isTimerRunning: false
+    });
+  };
+
+  // 타이머 리셋
+  const handleResetTimer = async () => {
+    await updateSession(currentSession.id, {
+      timerEndTime: null,
+      isTimerRunning: false
+    });
+    setRemainingTime('--:--');
+  };
 
   const toggleTeamExpand = (teamId: number) => {
     setExpandedTeams(prev => {
@@ -154,11 +208,52 @@ const AdminDashboard: React.FC<Props> = ({ currentSession, onToggleReport, onLog
                 </div>
             </div>
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-slate-500 font-medium">남은 시간</h3>
-                    <Clock className="text-red-500" />
+                <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-slate-500 font-medium">타이머 제어</h3>
+                    <Clock className={`${currentSession.isTimerRunning ? 'text-red-500 animate-pulse' : 'text-slate-400'}`} />
                 </div>
-                <p className="text-3xl font-black text-slate-800">59:21</p>
+                <p className={`text-3xl font-black mb-3 ${currentSession.isTimerRunning ? 'text-red-600' : 'text-slate-400'}`}>
+                  {remainingTime}
+                </p>
+                {!currentSession.isTimerRunning ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        value={timerMinutes}
+                        onChange={(e) => setTimerMinutes(Math.max(1, parseInt(e.target.value) || 1))}
+                        className="w-20 px-2 py-1 border rounded text-center font-bold"
+                        min="1"
+                        max="180"
+                      />
+                      <span className="text-sm text-slate-500">분</span>
+                    </div>
+                    <button
+                      onClick={handleStartTimer}
+                      className="w-full bg-green-600 text-white py-2 rounded font-bold text-sm hover:bg-green-700 flex items-center justify-center gap-1"
+                    >
+                      <Play className="w-4 h-4" />
+                      시작
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleStopTimer}
+                      className="flex-1 bg-yellow-500 text-white py-2 rounded font-bold text-sm hover:bg-yellow-600 flex items-center justify-center gap-1"
+                    >
+                      <Square className="w-4 h-4" />
+                      정지
+                    </button>
+                    <button
+                      onClick={handleResetTimer}
+                      className="flex-1 bg-slate-500 text-white py-2 rounded font-bold text-sm hover:bg-slate-600 flex items-center justify-center gap-1"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      리셋
+                    </button>
+                  </div>
+                )}
             </div>
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                 <div className="flex items-center justify-between mb-4">
@@ -245,21 +340,39 @@ const AdminDashboard: React.FC<Props> = ({ currentSession, onToggleReport, onLog
                             </div>
                           )}
 
-                          <div className="flex gap-2 mt-4 pt-4 border-t">
-                            <button
-                              onClick={() => setSelectedReport(report)}
-                              className="flex-1 bg-blue-600 text-white py-2 rounded font-bold text-sm hover:bg-blue-700 flex items-center justify-center gap-1"
-                            >
-                              <Eye className="w-4 h-4" />
-                              전체 보기
-                            </button>
-                            <button
-                              onClick={() => downloadReportAsJSON(report)}
-                              className="flex-1 bg-slate-200 text-slate-700 py-2 rounded font-bold text-sm hover:bg-slate-300 flex items-center justify-center gap-1"
-                            >
-                              <Download className="w-4 h-4" />
-                              JSON
-                            </button>
+                          <div className="flex flex-col gap-2 mt-4 pt-4 border-t">
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => setSelectedReport(report)}
+                                className="flex-1 bg-blue-600 text-white py-2 rounded font-bold text-sm hover:bg-blue-700 flex items-center justify-center gap-1"
+                              >
+                                <Eye className="w-4 h-4" />
+                                전체 보기
+                              </button>
+                              <button
+                                onClick={() => downloadReportAsJSON(report)}
+                                className="flex-1 bg-slate-200 text-slate-700 py-2 rounded font-bold text-sm hover:bg-slate-300 flex items-center justify-center gap-1"
+                              >
+                                <Download className="w-4 h-4" />
+                                JSON
+                              </button>
+                            </div>
+                            {report.reportImageUrl ? (
+                              <a
+                                href={report.reportImageUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                download={`${report.teamId}조_${report.userName}_보고서.png`}
+                                className="w-full bg-purple-600 text-white py-2 rounded font-bold text-sm hover:bg-purple-700 flex items-center justify-center gap-1"
+                              >
+                                <Image className="w-4 h-4" />
+                                PNG 이미지 다운로드
+                              </a>
+                            ) : (
+                              <div className="w-full bg-gray-100 text-gray-400 py-2 rounded text-sm text-center italic">
+                                이미지 없음 (학습자 미생성)
+                              </div>
+                            )}
                           </div>
                       </div>
                   </div>
@@ -285,6 +398,33 @@ const AdminDashboard: React.FC<Props> = ({ currentSession, onToggleReport, onLog
               </button>
             </div>
             <div className="p-6 space-y-4">
+              {/* PNG 이미지가 있으면 표시 */}
+              {selectedReport.reportImageUrl && (
+                <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <h5 className="font-black text-sm flex items-center gap-2">
+                      <Image className="w-4 h-4" />
+                      인포그래픽 보고서
+                    </h5>
+                    <a
+                      href={selectedReport.reportImageUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      download={`${selectedReport.teamId}조_${selectedReport.userName}_보고서.png`}
+                      className="bg-purple-600 text-white px-3 py-1 rounded text-sm font-bold hover:bg-purple-700 flex items-center gap-1"
+                    >
+                      <Download className="w-3 h-3" />
+                      다운로드
+                    </a>
+                  </div>
+                  <img
+                    src={selectedReport.reportImageUrl}
+                    alt="보고서 이미지"
+                    className="w-full rounded border border-purple-300"
+                  />
+                </div>
+              )}
+
               <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
                 <h4 className="font-black text-lg">{selectedReport.report.title}</h4>
                 <p className="text-sm text-slate-600 mt-1">팀원: {selectedReport.report.members}</p>

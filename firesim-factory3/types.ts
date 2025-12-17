@@ -11,11 +11,15 @@ export type SimulationStep =
 export type UserRole = 'ADMIN' | 'STUDENT' | null;
 
 export interface SessionConfig {
-  id: string; 
+  id: string;
   groupName: string;
-  totalTeams: number; 
+  totalTeams: number;
   createdAt: number;
   isReportEnabled: boolean; // Control report submission
+  // 타이머 관련 필드
+  timerEndTime?: number | null; // 카운트다운 종료 시각 (timestamp)
+  timerDuration?: number; // 설정된 타이머 시간 (분 단위)
+  isTimerRunning?: boolean; // 타이머 실행 중 여부
 }
 
 export interface UserProfile {
@@ -98,6 +102,7 @@ export interface ReportData {
   teamId: number;
   userName: string;
   report: FinalReportData;
+  reportImageUrl?: string; // Firebase Storage에 저장된 PNG 이미지 URL
   submittedAt?: number;
   createdAt?: any;
   updatedAt?: any;

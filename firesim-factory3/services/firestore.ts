@@ -1,5 +1,5 @@
 // Firestore 데이터베이스 서비스
-import { db } from '../firebase';
+import { db, storage } from '../firebase';
 import {
   collection,
   doc,
@@ -16,6 +16,7 @@ import {
   Timestamp,
   Unsubscribe
 } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { SessionConfig, ReportData } from '../types';
 
 // ============ 세션(방) 관리 ============
@@ -194,4 +195,35 @@ export const getReportByTeam = async (
     ...snapshot.docs[0].data(),
     id: snapshot.docs[0].id
   } as ReportData;
+};
+
+// ============ 보고서 이미지(PNG) 관리 ============
+
+// PNG 이미지 업로드 및 URL 반환
+export const uploadReportImage = async (
+  sessionId: string,
+  teamId: number,
+  userName: string,
+  imageBlob: Blob
+): Promise<string> => {
+  const timestamp = Date.now();
+  const fileName = `reports/${sessionId}/${teamId}조_${userName}_${timestamp}.png`;
+  const storageRef = ref(storage, fileName);
+
+  await uploadBytes(storageRef, imageBlob);
+  const downloadURL = await getDownloadURL(storageRef);
+
+  return downloadURL;
+};
+
+// 보고서에 이미지 URL 업데이트
+export const updateReportImageUrl = async (
+  reportId: string,
+  imageUrl: string
+): Promise<void> => {
+  const reportRef = doc(db, 'reports', reportId);
+  await updateDoc(reportRef, {
+    reportImageUrl: imageUrl,
+    updatedAt: Timestamp.now()
+  });
 };

@@ -1,6 +1,7 @@
 // Firebase 설정 파일
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
 
 // Firebase 설정 정보
 const firebaseConfig = {
@@ -17,5 +18,8 @@ const app = initializeApp(firebaseConfig);
 
 // Firestore 데이터베이스 내보내기
 export const db = getFirestore(app);
+
+// Firebase Storage 내보내기
+export const storage = getStorage(app);
 
 export default app;

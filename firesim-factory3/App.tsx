@@ -10,8 +10,11 @@ import {
   subscribeToSessions,
   createSessionWithId,
   deleteSession as deleteSessionFromDB,
-  updateSession
+  updateSession,
+  getSession
 } from './services/firestore';
+import { db } from './firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
 
 const INITIAL_STATE: SimulationState = {
   currentStep: 'INTRO',
@@ -55,6 +58,27 @@ export default function App() {
 
     return () => unsubscribe();
   }, []);
+
+  // 현재 세션의 타이머 등 정보 실시간 구독 (학습자/관리자 모드에서)
+  useEffect(() => {
+    if (!currentSession.id || currentSession.id === 'default') return;
+
+    const sessionRef = doc(db, 'sessions', currentSession.id);
+    const unsubscribe = onSnapshot(sessionRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        setCurrentSession(prev => ({
+          ...prev,
+          isReportEnabled: data.isReportEnabled ?? prev.isReportEnabled,
+          timerEndTime: data.timerEndTime ?? null,
+          timerDuration: data.timerDuration ?? undefined,
+          isTimerRunning: data.isTimerRunning ?? false,
+        }));
+      }
+    });
+
+    return () => unsubscribe();
+  }, [currentSession.id]);
 
   // --- Handlers ---
 
@@ -259,6 +283,8 @@ export default function App() {
       onLogout={handleModeSwitch}
       isAdmin={isAdmin}
       isReportEnabled={currentSession.isReportEnabled}
+      timerEndTime={currentSession.timerEndTime}
+      isTimerRunning={currentSession.isTimerRunning}
     />
   );
 }
