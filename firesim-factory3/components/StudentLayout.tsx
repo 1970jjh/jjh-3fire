@@ -85,11 +85,14 @@ const StudentLayout: React.FC<Props> = ({ gameState, setGameState, totalTeams, s
       <header className="bg-white px-4 py-3 border-b-2 border-black sticky top-0 z-20 flex items-center justify-between">
         <div className="flex items-center gap-2">
             {gameState.currentStep !== 'INTRO' && (
-                <button 
+                <button
                   onClick={() => {
-                    if(confirm('초기 화면으로 돌아가시겠습니까? (진행상황은 저장되지 않습니다)')) {
-                       onLogout();
-                    }
+                    // INTRO 화면(팀 화면)으로 돌아가기
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    setGameState(prev => ({
+                      ...prev,
+                      currentStep: 'INTRO'
+                    }));
                   }}
                   className="p-1 hover:bg-gray-100 border-2 border-transparent hover:border-black transition-all"
                 >
