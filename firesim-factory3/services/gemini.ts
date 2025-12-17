@@ -1,4 +1,4 @@
-// Gemini 2.0 Flash Exp Image Generation API 서비스 - 인포그래픽 이미지 생성 (서버리스 함수 경유)
+// Gemini 3 Pro Image Preview API 서비스 - 인포그래픽 이미지 생성 (서버리스 함수 경유)
 import { FinalReportData } from '../types';
 
 // 보고서 데이터를 기반으로 인포그래픽 생성 프롬프트 생성
