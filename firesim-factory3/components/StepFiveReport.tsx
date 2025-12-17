@@ -468,7 +468,7 @@ const StepFiveReport: React.FC<Props> = ({ data, sessionId, onRestart, isReportE
                 ) : (
                   <>
                     <Sparkles className="w-5 h-5" />
-                    AI 인포그래픽 생성 (Gemini)
+                    AI 인포그래픽 생성 (Gemini 3 Pro)
                   </>
                 )}
             </button>
