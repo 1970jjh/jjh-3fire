@@ -15,12 +15,13 @@ interface Props {
   gameState: SimulationState;
   setGameState: React.Dispatch<React.SetStateAction<SimulationState>>;
   totalTeams: number;
+  sessionId: string;
   onLogout: () => void;
   isAdmin?: boolean;
   isReportEnabled: boolean; // Prop for report submission control
 }
 
-const StudentLayout: React.FC<Props> = ({ gameState, setGameState, totalTeams, onLogout, isAdmin = false, isReportEnabled }) => {
+const StudentLayout: React.FC<Props> = ({ gameState, setGameState, totalTeams, sessionId, onLogout, isAdmin = false, isReportEnabled }) => {
   const [showGuide, setShowGuide] = useState(false);
   const [showInfoCard, setShowInfoCard] = useState(false);
   
@@ -165,8 +166,9 @@ const StudentLayout: React.FC<Props> = ({ gameState, setGameState, totalTeams, o
             />
         )}
         {gameState.currentStep === 'REPORT' && (
-            <StepFiveReport 
+            <StepFiveReport
                 data={gameState}
+                sessionId={sessionId}
                 onRestart={onLogout}
                 isReportEnabled={isReportEnabled}
                 onUpdateReport={(reportData) => setGameState(prev => ({...prev, finalReport: reportData}))}

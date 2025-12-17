@@ -1,26 +1,30 @@
 import React, { useState, useRef } from 'react';
 import { SimulationState, FinalReportData } from '../types';
-import { Lock, FileText, Download, CheckCircle, Home } from 'lucide-react';
+import { Lock, FileText, Download, CheckCircle, Home, Loader2, CloudUpload } from 'lucide-react';
+import { submitReport } from '../services/firestore';
 
 interface Props {
   data: SimulationState;
+  sessionId: string;
   onRestart: () => void;
   isReportEnabled: boolean;
   onUpdateReport: (report: FinalReportData) => void;
 }
 
-const StepFiveReport: React.FC<Props> = ({ data, onRestart, isReportEnabled, onUpdateReport }) => {
+const StepFiveReport: React.FC<Props> = ({ data, sessionId, onRestart, isReportEnabled, onUpdateReport }) => {
   const [isEditing, setIsEditing] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
-  
+
   // Initialize form with previous step data
   const [formData, setFormData] = useState<FinalReportData>({
     title: `${data.teamName} 화재사고 분석 보고서`,
     members: data.user?.name || '',
     contents: '1. 개요\n2. 현상 파악\n3. 원인 분석\n4. 해결 방안',
     situation: data.gapAnalysis.current,
-    definition: data.gapAnalysis.ideal, // Using ideal as part of definition context or just user input
-    cause: '전력 과부하, 소화기 미작동, 관리 소홀', // simplified default or map from rootCauses
+    definition: data.gapAnalysis.ideal,
+    cause: '전력 과부하, 소화기 미작동, 관리 소홀',
     solution: data.solutions.shortTerm,
     prevention: data.solutions.prevention,
     schedule: '즉시: 소화기 교체\n1주 내: 안전 교육\n1달 내: 설비 증설'
@@ -30,18 +34,38 @@ const StepFiveReport: React.FC<Props> = ({ data, onRestart, isReportEnabled, onU
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!formData.title || !formData.members) {
         alert("보고서 제목과 팀원 이름을 입력해주세요.");
         return;
     }
-    onUpdateReport(formData);
-    setIsEditing(false);
+
+    setIsSubmitting(true);
+
+    try {
+      // Firebase에 보고서 저장
+      await submitReport({
+        sessionId: sessionId,
+        teamId: data.user?.teamId || 0,
+        userName: data.user?.name || '',
+        report: formData,
+        submittedAt: Date.now()
+      });
+
+      onUpdateReport(formData);
+      setIsEditing(false);
+      setIsSubmitted(true);
+    } catch (error) {
+      console.error('보고서 제출 실패:', error);
+      alert('보고서 제출에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleDownload = async () => {
     if (!reportRef.current) return;
-    
+
     try {
         // @ts-ignore
         const html2canvas = window.html2canvas;
@@ -122,11 +146,22 @@ const StepFiveReport: React.FC<Props> = ({ data, onRestart, isReportEnabled, onU
             </div>
 
             <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t-2 border-black md:absolute z-30">
-                <button 
+                <button
                 onClick={handleSubmit}
-                className="w-full bg-black text-white font-black py-4 border-2 border-black shadow-[4px_4px_0px_0px_#71717a] hover:bg-gray-800 transition-colors uppercase tracking-wider"
+                disabled={isSubmitting}
+                className="w-full bg-black text-white font-black py-4 border-2 border-black shadow-[4px_4px_0px_0px_#71717a] hover:bg-gray-800 transition-colors uppercase tracking-wider flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                GENERATE REPORT
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    제출 중...
+                  </>
+                ) : (
+                  <>
+                    <CloudUpload className="w-5 h-5" />
+                    SUBMIT REPORT
+                  </>
+                )}
                 </button>
             </div>
         </div>
@@ -136,6 +171,16 @@ const StepFiveReport: React.FC<Props> = ({ data, onRestart, isReportEnabled, onU
   // State 3: Infographic Preview & Download
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-24">
+        {isSubmitted && (
+          <div className="bg-green-100 border-2 border-green-600 p-4 flex items-center gap-3">
+            <CheckCircle className="w-6 h-6 text-green-600" />
+            <div>
+              <p className="font-black text-green-800">보고서가 제출되었습니다!</p>
+              <p className="text-sm text-green-700">관리자가 확인할 수 있습니다.</p>
+            </div>
+          </div>
+        )}
+
         <div className="bg-[#4f46e5] text-white p-4 border-2 border-black shadow-[4px_4px_0px_0px_#000] flex justify-between items-center">
             <div>
                 <h2 className="text-xl font-black uppercase">Report Preview</h2>
@@ -146,7 +191,7 @@ const StepFiveReport: React.FC<Props> = ({ data, onRestart, isReportEnabled, onU
 
         {/* Infographic Container (Bento Grid) */}
         <div ref={reportRef} className="bg-white p-4 md:p-8 border-2 border-black shadow-[8px_8px_0px_0px_#000] max-w-2xl mx-auto">
-            
+
             {/* Header */}
             <div className="mb-6 border-b-4 border-black pb-4">
                 <div className="flex justify-between items-end mb-2">
@@ -161,7 +206,7 @@ const StepFiveReport: React.FC<Props> = ({ data, onRestart, isReportEnabled, onU
 
             {/* Grid Layout */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                
+
                 {/* 1. 목차 */}
                 <div className="md:col-span-1 bg-gray-100 p-4 border-2 border-black">
                     <h3 className="text-xs font-black bg-black text-white inline-block px-1 mb-2">CONTENTS</h3>
@@ -217,13 +262,13 @@ const StepFiveReport: React.FC<Props> = ({ data, onRestart, isReportEnabled, onU
 
         {/* Action Buttons */}
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t-2 border-black md:absolute z-30 flex gap-3">
-            <button 
+            <button
                 onClick={() => setIsEditing(true)}
                 className="flex-1 bg-white border-2 border-black text-black font-black py-4 shadow-[4px_4px_0px_0px_#000] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[3px_3px_0px_0px_#000]"
             >
                 EDIT
             </button>
-            <button 
+            <button
                 onClick={handleDownload}
                 className="flex-[2] bg-black text-white font-black py-4 border-2 border-black shadow-[4px_4px_0px_0px_#71717a] hover:bg-gray-800 hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[3px_3px_0px_0px_#71717a] flex items-center justify-center gap-2"
             >
