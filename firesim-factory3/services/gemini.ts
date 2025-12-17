@@ -45,19 +45,57 @@ export const generateInfographicImage = async (
       body: JSON.stringify({ prompt })
     });
 
-    const data = await response.json();
+    // 1. 먼저 응답 텍스트를 가져옴
+    const responseText = await response.text();
 
-    if (!response.ok || data.error) {
+    // 2. response.ok 먼저 확인
+    if (!response.ok) {
+      // 타임아웃이나 서버 에러인 경우
+      let errorMessage = `서버 오류 (${response.status})`;
+
+      // JSON인지 확인 후 파싱 시도
+      try {
+        const errorData = JSON.parse(responseText);
+        if (errorData.error) {
+          errorMessage = errorData.error;
+        }
+      } catch {
+        // JSON이 아닌 경우 (Vercel 타임아웃 등)
+        if (response.status === 504) {
+          errorMessage = '이미지 생성 시간이 초과되었습니다. 다시 시도해주세요.';
+        } else if (responseText) {
+          errorMessage = responseText.substring(0, 100);
+        }
+      }
+
       return {
         success: false,
-        error: data.error || `API 오류: ${response.status}`
+        error: errorMessage
+      };
+    }
+
+    // 3. 성공 응답을 JSON으로 파싱
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch {
+      return {
+        success: false,
+        error: '서버 응답을 처리할 수 없습니다.'
+      };
+    }
+
+    if (data.error) {
+      return {
+        success: false,
+        error: data.error
       };
     }
 
     if (!data.success || !data.imageBase64) {
       return {
         success: false,
-        error: '이미지 생성에 실패했습니다.'
+        error: '이미지 생성에 실패했습니다. 다시 시도해주세요.'
       };
     }
 
@@ -79,7 +117,7 @@ export const generateInfographicImage = async (
     console.error('Gemini 이미지 생성 실패:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.'
+      error: '네트워크 오류가 발생했습니다. 다시 시도해주세요.'
     };
   }
 };
