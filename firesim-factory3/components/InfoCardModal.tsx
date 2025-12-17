@@ -47,8 +47,8 @@ const InfoCardModal: React.FC<Props> = ({ teamId, totalTeams, onClose, notes, on
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-       <div className="bg-white w-full max-w-5xl max-h-[95vh] border-4 border-black shadow-[8px_8px_0px_0px_#000] flex flex-col animate-in zoom-in-95 duration-300">
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
+       <div className="bg-white w-full max-w-md sm:max-w-lg md:max-w-5xl max-h-[95vh] border-4 border-black shadow-[8px_8px_0px_0px_#000] flex flex-col animate-in zoom-in-95 duration-300">
           
           {/* Header */}
           <div className="bg-black p-4 flex justify-between items-center text-white shrink-0 border-b-4 border-black">
@@ -67,7 +67,7 @@ const InfoCardModal: React.FC<Props> = ({ teamId, totalTeams, onClose, notes, on
           </div>
 
           {/* Scrollable Content */}
-          <div className="p-6 overflow-y-auto flex-1 bg-white scrollbar-hide">
+          <div className="p-4 sm:p-6 overflow-y-auto flex-1 bg-white scrollbar-hide">
              {/* Evidence Grid */}
              <div className="flex items-center gap-2 mb-6 border-b-2 border-black pb-2">
                 <Grid className="w-5 h-5" />
@@ -80,7 +80,7 @@ const InfoCardModal: React.FC<Props> = ({ teamId, totalTeams, onClose, notes, on
                     <p className="font-bold">NO DATA FOUND</p>
                 </div>
              ) : (
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-4 mb-8">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 sm:gap-4 mb-8">
                     {teamImages.map((src, idx) => {
                         const label = getLabel(src);
                         return (
@@ -105,26 +105,27 @@ const InfoCardModal: React.FC<Props> = ({ teamId, totalTeams, onClose, notes, on
              )}
 
             {/* Private Notes Section */}
-            <div className="bg-gray-50 border-t-4 border-black -mx-6 px-6 py-6 pb-2">
+            <div className="bg-gray-50 border-t-4 border-black -mx-4 sm:-mx-6 px-4 sm:px-6 py-4 sm:py-6 pb-2">
                 <div className="flex items-center gap-2 mb-4">
                     <PenTool className="w-5 h-5" />
-                    <span className="font-black text-lg uppercase">Private Notes</span>
+                    <span className="font-black text-base sm:text-lg uppercase">Private Notes</span>
                 </div>
-                
-                <form onSubmit={handleAddSubmit} className="flex gap-2 mb-4">
-                    <input 
-                        type="text" 
+
+                <form onSubmit={handleAddSubmit} className="flex flex-col sm:flex-row gap-2 mb-4">
+                    <input
+                        type="text"
                         value={newNote}
                         onChange={(e) => setNewNote(e.target.value)}
-                        placeholder="새로운 단서나 아이디어를 기록하세요..." 
-                        className="flex-1 p-3 border-2 border-black focus:outline-none focus:shadow-[4px_4px_0px_0px_#000] font-bold text-sm"
+                        placeholder="단서나 아이디어를 기록..."
+                        className="w-full sm:flex-1 p-2 sm:p-3 border-2 border-black focus:outline-none focus:shadow-[4px_4px_0px_0px_#000] font-bold text-sm"
                     />
-                    <button 
+                    <button
                         type="submit"
                         disabled={!newNote.trim()}
-                        className="bg-black text-white px-4 py-2 border-2 border-black hover:bg-gray-800 disabled:opacity-50 font-black shadow-[4px_4px_0px_0px_#71717a] active:shadow-none active:translate-x-[2px] active:translate-y-[2px] transition-all"
+                        className="bg-black text-white px-4 py-2 border-2 border-black hover:bg-gray-800 disabled:opacity-50 font-black shadow-[4px_4px_0px_0px_#71717a] active:shadow-none active:translate-x-[2px] active:translate-y-[2px] transition-all flex items-center justify-center gap-2"
                     >
                         <Plus className="w-5 h-5" />
+                        <span className="sm:hidden">추가</span>
                     </button>
                 </form>
 
