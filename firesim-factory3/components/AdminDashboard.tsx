@@ -357,7 +357,18 @@ const AdminDashboard: React.FC<Props> = ({ currentSession, onToggleReport, onLog
                                 JSON
                               </button>
                             </div>
-                            {report.reportImageUrl ? (
+                            {/* AI 보고서 (인포그래픽) 다운로드 */}
+                            {report.aiReportImageUrl ? (
+                              <a
+                                href={report.aiReportImageUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-2 rounded font-bold text-sm hover:from-purple-700 hover:to-pink-700 flex items-center justify-center gap-1"
+                              >
+                                <Image className="w-4 h-4" />
+                                AI 보고서 다운로드
+                              </a>
+                            ) : report.reportImageUrl ? (
                               <a
                                 href={report.reportImageUrl}
                                 target="_blank"
@@ -370,7 +381,7 @@ const AdminDashboard: React.FC<Props> = ({ currentSession, onToggleReport, onLog
                               </a>
                             ) : (
                               <div className="w-full bg-gray-100 text-gray-400 py-2 rounded text-sm text-center italic">
-                                이미지 없음 (학습자 미생성)
+                                AI 보고서 미제출
                               </div>
                             )}
                           </div>
@@ -398,8 +409,39 @@ const AdminDashboard: React.FC<Props> = ({ currentSession, onToggleReport, onLog
               </button>
             </div>
             <div className="p-6 space-y-4">
-              {/* PNG 이미지가 있으면 표시 */}
-              {selectedReport.reportImageUrl && (
+              {/* AI 보고서 이미지 (우선 표시) */}
+              {selectedReport.aiReportImageUrl && (
+                <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-4 rounded-lg border border-purple-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <h5 className="font-black text-sm flex items-center gap-2">
+                      <Image className="w-4 h-4" />
+                      AI 인포그래픽 보고서
+                      {selectedReport.aiReportSubmittedBy && (
+                        <span className="text-xs font-normal text-purple-600">
+                          (제출: {selectedReport.aiReportSubmittedBy})
+                        </span>
+                      )}
+                    </h5>
+                    <a
+                      href={selectedReport.aiReportImageUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-3 py-1 rounded text-sm font-bold hover:from-purple-700 hover:to-pink-700 flex items-center gap-1"
+                    >
+                      <Download className="w-3 h-3" />
+                      다운로드
+                    </a>
+                  </div>
+                  <img
+                    src={selectedReport.aiReportImageUrl}
+                    alt="AI 보고서 이미지"
+                    className="w-full rounded border border-purple-300"
+                  />
+                </div>
+              )}
+
+              {/* 기존 PNG 이미지 (AI 보고서가 없을 때만 표시) */}
+              {!selectedReport.aiReportImageUrl && selectedReport.reportImageUrl && (
                 <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
                   <div className="flex items-center justify-between mb-3">
                     <h5 className="font-black text-sm flex items-center gap-2">

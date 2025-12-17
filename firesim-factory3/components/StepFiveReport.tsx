@@ -1,26 +1,29 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { SimulationState, FinalReportData } from '../types';
-import { Lock, FileText, Download, CheckCircle, Home, Loader2, CloudUpload, Image, Sparkles, AlertCircle } from 'lucide-react';
-import { submitReport, uploadReportImage, updateReportImageUrl } from '../services/firestore';
+import { Lock, FileText, Download, CheckCircle, Loader2, CloudUpload, Image, Sparkles, AlertCircle, Ban } from 'lucide-react';
+import { submitReport, uploadAIReportImage, submitAIReport, subscribeToTeamAIReportStatus } from '../services/firestore';
 import { generateInfographicImage } from '../services/gemini';
 
 interface Props {
   data: SimulationState;
   sessionId: string;
+  groupName: string; // 교육 그룹명
   onRestart: () => void;
   isReportEnabled: boolean;
   onUpdateReport: (report: FinalReportData) => void;
 }
 
-const StepFiveReport: React.FC<Props> = ({ data, sessionId, onRestart, isReportEnabled, onUpdateReport }) => {
+const StepFiveReport: React.FC<Props> = ({ data, sessionId, groupName, onRestart, isReportEnabled, onUpdateReport }) => {
   const [isEditing, setIsEditing] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
-  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [aiInfographicUrl, setAiInfographicUrl] = useState<string | null>(null);
+  const [aiInfographicBlob, setAiInfographicBlob] = useState<Blob | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [isSubmittingFinal, setIsSubmittingFinal] = useState(false);
+  const [isFinalSubmitted, setIsFinalSubmitted] = useState(false);
+  const [teamAlreadySubmitted, setTeamAlreadySubmitted] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
 
   // Initialize form with empty values - students fill everything
@@ -35,6 +38,24 @@ const StepFiveReport: React.FC<Props> = ({ data, sessionId, onRestart, isReportE
     prevention: '',
     schedule: ''
   });
+
+  // 팀 AI 보고서 제출 상태 실시간 구독
+  useEffect(() => {
+    if (!sessionId || !data.user?.teamId) return;
+
+    const unsubscribe = subscribeToTeamAIReportStatus(
+      sessionId,
+      data.user.teamId,
+      (submitted) => {
+        setTeamAlreadySubmitted(submitted);
+        if (submitted) {
+          setIsFinalSubmitted(true);
+        }
+      }
+    );
+
+    return () => unsubscribe();
+  }, [sessionId, data.user?.teamId]);
 
   const handleInputChange = (field: keyof FinalReportData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -69,64 +90,6 @@ const StepFiveReport: React.FC<Props> = ({ data, sessionId, onRestart, isReportE
     }
   };
 
-  // PNG 이미지 생성 및 Firebase Storage 업로드
-  const handleGenerateAndUpload = async () => {
-    if (!reportRef.current) return;
-
-    setIsGeneratingImage(true);
-
-    try {
-      // @ts-ignore
-      const html2canvas = window.html2canvas;
-      if (!html2canvas) {
-        alert("이미지 생성 라이브러리를 불러오는 중입니다. 잠시 후 다시 시도해주세요.");
-        setIsGeneratingImage(false);
-        return;
-      }
-
-      // PNG 생성
-      const canvas = await html2canvas(reportRef.current, {
-        scale: 2,
-        backgroundColor: "#ffffff",
-        useCORS: true
-      });
-
-      // Canvas를 Blob으로 변환
-      const blob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob((b: Blob | null) => {
-          if (b) resolve(b);
-          else reject(new Error("Failed to create blob"));
-        }, 'image/png');
-      });
-
-      // Firebase Storage에 업로드
-      const imageUrl = await uploadReportImage(
-        sessionId,
-        data.user?.teamId || 0,
-        data.user?.name || '',
-        blob
-      );
-
-      // Firestore에 이미지 URL 저장을 위해 보고서 다시 제출
-      await submitReport({
-        sessionId: sessionId,
-        teamId: data.user?.teamId || 0,
-        userName: data.user?.name || '',
-        report: formData,
-        reportImageUrl: imageUrl,
-        submittedAt: Date.now()
-      });
-
-      setUploadedImageUrl(imageUrl);
-      alert('보고서 이미지가 생성되어 저장되었습니다!');
-    } catch (err) {
-      console.error("이미지 생성/업로드 실패:", err);
-      alert("이미지 생성 또는 업로드 중 오류가 발생했습니다.");
-    } finally {
-      setIsGeneratingImage(false);
-    }
-  };
-
   const handleDownload = async () => {
     if (!reportRef.current) return;
 
@@ -154,8 +117,8 @@ const StepFiveReport: React.FC<Props> = ({ data, sessionId, onRestart, isReportE
     }
   };
 
-  // Gemini AI를 사용하여 인포그래픽 이미지 생성
-  const handleGenerateAIInfographic = async () => {
+  // AI 보고서 생성 (Imagen 4)
+  const handleGenerateAIReport = async () => {
     setIsGeneratingAI(true);
     setAiError(null);
 
@@ -163,35 +126,63 @@ const StepFiveReport: React.FC<Props> = ({ data, sessionId, onRestart, isReportE
       const result = await generateInfographicImage(formData, data.teamName);
 
       if (!result.success || !result.imageBlob) {
-        setAiError(result.error || '인포그래픽 생성에 실패했습니다.');
+        setAiError(result.error || 'AI 보고서 생성에 실패했습니다.');
         return;
       }
 
-      // Firebase Storage에 업로드
-      const imageUrl = await uploadReportImage(
-        sessionId,
-        data.user?.teamId || 0,
-        `${data.user?.name || ''}_AI`,
-        result.imageBlob
-      );
+      // Blob을 URL로 변환하여 미리보기 표시
+      const previewUrl = URL.createObjectURL(result.imageBlob);
+      setAiInfographicUrl(previewUrl);
+      setAiInfographicBlob(result.imageBlob);
 
-      // Firestore에 AI 이미지 URL 저장
-      await submitReport({
-        sessionId: sessionId,
-        teamId: data.user?.teamId || 0,
-        userName: data.user?.name || '',
-        report: formData,
-        reportImageUrl: imageUrl,
-        submittedAt: Date.now()
-      });
-
-      setAiInfographicUrl(imageUrl);
-      alert('AI 인포그래픽이 생성되어 저장되었습니다!');
+      alert('AI 보고서가 생성되었습니다! 최종 제출 버튼을 눌러 관리자에게 제출하세요.');
     } catch (err) {
-      console.error('AI 인포그래픽 생성 실패:', err);
+      console.error('AI 보고서 생성 실패:', err);
       setAiError(err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.');
     } finally {
       setIsGeneratingAI(false);
+    }
+  };
+
+  // AI 보고서 최종 제출
+  const handleFinalSubmit = async () => {
+    if (!aiInfographicBlob) {
+      alert('먼저 AI 보고서를 생성해주세요.');
+      return;
+    }
+
+    if (teamAlreadySubmitted) {
+      alert('이미 팀에서 AI 보고서를 제출했습니다. 추가 제출은 불가능합니다.');
+      return;
+    }
+
+    setIsSubmittingFinal(true);
+
+    try {
+      // Firebase Storage에 업로드 (파일명: 교육그룹명_#조_년월일.png)
+      const imageUrl = await uploadAIReportImage(
+        sessionId,
+        groupName,
+        data.user?.teamId || 0,
+        aiInfographicBlob
+      );
+
+      // Firestore에 AI 보고서 제출 기록
+      await submitAIReport(
+        sessionId,
+        data.user?.teamId || 0,
+        data.user?.name || '',
+        imageUrl,
+        formData
+      );
+
+      setIsFinalSubmitted(true);
+      alert('AI 보고서가 최종 제출되었습니다! 관리자가 확인할 수 있습니다.');
+    } catch (err) {
+      console.error('AI 보고서 최종 제출 실패:', err);
+      alert('AI 보고서 제출에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      setIsSubmittingFinal(false);
     }
   };
 
@@ -275,13 +266,24 @@ const StepFiveReport: React.FC<Props> = ({ data, sessionId, onRestart, isReportE
 
   // State 3: Infographic Preview & Download
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 pb-24">
+    <div className="space-y-6 animate-in fade-in duration-500 pb-40">
         {isSubmitted && (
           <div className="bg-green-100 border-2 border-green-600 p-4 flex items-center gap-3">
             <CheckCircle className="w-6 h-6 text-green-600" />
             <div>
               <p className="font-black text-green-800">보고서가 제출되었습니다!</p>
               <p className="text-sm text-green-700">관리자가 확인할 수 있습니다.</p>
+            </div>
+          </div>
+        )}
+
+        {/* 팀 이미 제출 경고 */}
+        {teamAlreadySubmitted && (
+          <div className="bg-orange-100 border-2 border-orange-600 p-4 flex items-center gap-3">
+            <Ban className="w-6 h-6 text-orange-600" />
+            <div>
+              <p className="font-black text-orange-800">팀에서 이미 AI 보고서를 제출했습니다</p>
+              <p className="text-sm text-orange-700">추가 제출은 불가능합니다.</p>
             </div>
           </div>
         )}
@@ -365,37 +367,23 @@ const StepFiveReport: React.FC<Props> = ({ data, sessionId, onRestart, isReportE
             </div>
         </div>
 
-        {/* Uploaded Image Success Message */}
-        {uploadedImageUrl && (
-          <div className="bg-blue-100 border-2 border-blue-600 p-4 flex items-center gap-3">
-            <Image className="w-6 h-6 text-blue-600" />
-            <div>
-              <p className="font-black text-blue-800">이미지가 서버에 저장되었습니다!</p>
-              <p className="text-sm text-blue-700">관리자가 동일한 이미지를 다운로드할 수 있습니다.</p>
-            </div>
-          </div>
-        )}
-
-        {/* AI Infographic Section */}
+        {/* AI 보고서 미리보기 */}
         {aiInfographicUrl && (
           <div className="bg-gradient-to-r from-purple-100 to-pink-100 border-2 border-purple-600 p-4 rounded-lg">
             <div className="flex items-center gap-2 mb-3">
               <Sparkles className="w-6 h-6 text-purple-600" />
-              <p className="font-black text-purple-800">AI 인포그래픽이 생성되었습니다!</p>
+              <p className="font-black text-purple-800">AI 보고서가 생성되었습니다!</p>
             </div>
             <img
               src={aiInfographicUrl}
-              alt="AI 생성 인포그래픽"
+              alt="AI 생성 보고서"
               className="w-full border-2 border-black shadow-[4px_4px_0px_0px_#000]"
             />
-            <a
-              href={aiInfographicUrl}
-              download={`${data.teamName}_AI_Infographic.png`}
-              className="mt-3 inline-flex items-center gap-2 bg-purple-600 text-white font-bold px-4 py-2 border-2 border-black hover:bg-purple-700"
-            >
-              <Download className="w-4 h-4" />
-              AI 인포그래픽 다운로드
-            </a>
+            {!isFinalSubmitted && (
+              <p className="mt-3 text-sm text-purple-700 font-bold">
+                아래 "AI 보고서 최종 제출" 버튼을 눌러 관리자에게 제출하세요.
+              </p>
+            )}
           </div>
         )}
 
@@ -404,8 +392,19 @@ const StepFiveReport: React.FC<Props> = ({ data, sessionId, onRestart, isReportE
           <div className="bg-red-100 border-2 border-red-600 p-4 flex items-center gap-3">
             <AlertCircle className="w-6 h-6 text-red-600" />
             <div>
-              <p className="font-black text-red-800">AI 인포그래픽 생성 실패</p>
+              <p className="font-black text-red-800">AI 보고서 생성 실패</p>
               <p className="text-sm text-red-700">{aiError}</p>
+            </div>
+          </div>
+        )}
+
+        {/* 최종 제출 완료 메시지 */}
+        {isFinalSubmitted && (
+          <div className="bg-green-100 border-2 border-green-600 p-4 flex items-center gap-3">
+            <CheckCircle className="w-6 h-6 text-green-600" />
+            <div>
+              <p className="font-black text-green-800">AI 보고서가 최종 제출되었습니다!</p>
+              <p className="text-sm text-green-700">관리자 대시보드에서 다운로드할 수 있습니다.</p>
             </div>
           </div>
         )}
@@ -427,48 +426,56 @@ const StepFiveReport: React.FC<Props> = ({ data, sessionId, onRestart, isReportE
                   내 기기 저장
               </button>
             </div>
+
+            {/* AI 보고서 생성 버튼 (먼저) */}
             <button
-                onClick={handleGenerateAndUpload}
-                disabled={isGeneratingImage || !!uploadedImageUrl}
-                className="w-full bg-[#4f46e5] text-white font-black py-4 border-2 border-black shadow-[4px_4px_0px_0px_#71717a] hover:bg-[#4338ca] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[3px_3px_0px_0px_#71717a] flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-                {isGeneratingImage ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    이미지 생성 중...
-                  </>
-                ) : uploadedImageUrl ? (
-                  <>
-                    <CheckCircle className="w-5 h-5" />
-                    서버 저장 완료
-                  </>
-                ) : (
-                  <>
-                    <CloudUpload className="w-5 h-5" />
-                    서버에 이미지 저장 (관리자 공유)
-                  </>
-                )}
-            </button>
-            {/* AI 인포그래픽 생성 버튼 */}
-            <button
-                onClick={handleGenerateAIInfographic}
-                disabled={isGeneratingAI || !!aiInfographicUrl}
+                onClick={handleGenerateAIReport}
+                disabled={isGeneratingAI || !!aiInfographicUrl || teamAlreadySubmitted}
                 className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-black py-4 border-2 border-black shadow-[4px_4px_0px_0px_#71717a] hover:from-purple-700 hover:to-pink-700 hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[3px_3px_0px_0px_#71717a] flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
                 {isGeneratingAI ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    AI 인포그래픽 생성 중... (약 30초 소요)
+                    AI 보고서 생성 중... (약 30초 소요)
                   </>
                 ) : aiInfographicUrl ? (
                   <>
                     <CheckCircle className="w-5 h-5" />
-                    AI 인포그래픽 생성 완료
+                    AI 보고서 생성 완료
+                  </>
+                ) : teamAlreadySubmitted ? (
+                  <>
+                    <Ban className="w-5 h-5" />
+                    팀 제출 완료
                   </>
                 ) : (
                   <>
                     <Sparkles className="w-5 h-5" />
-                    AI 인포그래픽 생성 (Gemini 3 Pro)
+                    AI 보고서 생성
+                  </>
+                )}
+            </button>
+
+            {/* AI 보고서 최종 제출 버튼 (나중에) */}
+            <button
+                onClick={handleFinalSubmit}
+                disabled={!aiInfographicUrl || isSubmittingFinal || isFinalSubmitted || teamAlreadySubmitted}
+                className="w-full bg-[#4f46e5] text-white font-black py-4 border-2 border-black shadow-[4px_4px_0px_0px_#71717a] hover:bg-[#4338ca] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[3px_3px_0px_0px_#71717a] flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+                {isSubmittingFinal ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    제출 중...
+                  </>
+                ) : isFinalSubmitted || teamAlreadySubmitted ? (
+                  <>
+                    <CheckCircle className="w-5 h-5" />
+                    AI 보고서 제출 완료
+                  </>
+                ) : (
+                  <>
+                    <CloudUpload className="w-5 h-5" />
+                    AI 보고서 최종 제출
                   </>
                 )}
             </button>
