@@ -90,3 +90,15 @@ export const INITIAL_POWER_DATA: PowerData[] = [
 ];
 
 export const MAX_POWER_LIMIT = 16000; // 16kW
+
+// Firebase에 저장되는 보고서 데이터
+export interface ReportData {
+  id?: string;
+  sessionId: string;
+  teamId: number;
+  userName: string;
+  report: FinalReportData;
+  submittedAt?: number;
+  createdAt?: any;
+  updatedAt?: any;
+}
