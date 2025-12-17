@@ -1,10 +1,10 @@
-// Gemini 2.0 Flash API 서비스 - 네이티브 이미지 생성
+// Gemini 3 Pro Image API 서비스 - 인포그래픽 이미지 생성
 import { FinalReportData } from '../types';
 
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
-// Gemini 2.0 Flash Experimental - 네이티브 이미지 생성 지원
-const IMAGE_MODEL = 'gemini-2.0-flash-exp';
+// Gemini 3 Pro Image - 멀티모달 이미지 생성 모델
+const IMAGE_MODEL = 'gemini-3.0-pro-image-001';
 
 interface GeminiImageResponse {
   candidates?: Array<{
