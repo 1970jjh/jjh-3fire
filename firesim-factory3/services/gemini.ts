@@ -1,26 +1,5 @@
-// Imagen 4 API 서비스 - 인포그래픽 이미지 생성
+// Gemini 3 Pro Image API 서비스 - 인포그래픽 이미지 생성 (서버리스 함수 경유)
 import { FinalReportData } from '../types';
-
-const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
-
-// Imagen 4 - 고품질 이미지 생성 모델
-const IMAGE_MODEL = 'imagen-4.0-generate-001';
-
-interface ImagenResponse {
-  generatedImages?: Array<{
-    image?: {
-      imageBytes: string; // base64 encoded image
-    };
-  }>;
-  predictions?: Array<{
-    bytesBase64Encoded: string;
-    mimeType: string;
-  }>;
-  error?: {
-    message: string;
-    code: number;
-  };
-}
 
 // 보고서 데이터를 기반으로 인포그래픽 생성 프롬프트 생성
 const createInfographicPrompt = (report: FinalReportData, teamName: string): string => {
@@ -50,104 +29,46 @@ DESIGN REQUIREMENTS:
 - Executive presentation quality`;
 };
 
-// Imagen 4를 사용하여 인포그래픽 이미지 생성
+// 서버리스 함수를 통해 Imagen 4 API 호출
 export const generateInfographicImage = async (
   report: FinalReportData,
   teamName: string
 ): Promise<{ success: boolean; imageBlob?: Blob; error?: string }> => {
-  const apiKey = process.env.GEMINI_API_KEY;
-
-  if (!apiKey) {
-    return {
-      success: false,
-      error: 'Gemini API 키가 설정되지 않았습니다. 관리자에게 문의하세요.'
-    };
-  }
-
   const prompt = createInfographicPrompt(report, teamName);
 
   try {
-    const response = await fetch(
-      `${GEMINI_API_BASE}/${IMAGE_MODEL}:generateImages?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          instances: [
-            {
-              prompt: prompt
-            }
-          ],
-          parameters: {
-            sampleCount: 1,
-            aspectRatio: '16:9',
-            personGeneration: 'DONT_ALLOW',
-            safetySetting: 'BLOCK_MEDIUM_AND_ABOVE'
-          }
-        })
-      }
-    );
+    const response = await fetch('/api/generate-image', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ prompt })
+    });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Imagen 4 API error:', errorText);
+    const data = await response.json();
 
-      try {
-        const errorJson = JSON.parse(errorText);
-        if (errorJson.error?.message) {
-          return {
-            success: false,
-            error: `API 오류: ${errorJson.error.message}`
-          };
-        }
-      } catch {
-        // JSON 파싱 실패시 원본 에러 사용
-      }
-
+    if (!response.ok || data.error) {
       return {
         success: false,
-        error: `API 오류: ${response.status} - ${response.statusText}`
+        error: data.error || `API 오류: ${response.status}`
       };
     }
 
-    const data: ImagenResponse = await response.json();
-
-    if (data.error) {
+    if (!data.success || !data.imageBase64) {
       return {
         success: false,
-        error: data.error.message
-      };
-    }
-
-    // 응답에서 이미지 데이터 추출
-    let base64Data: string | undefined;
-
-    // generatedImages 형식 체크
-    if (data.generatedImages?.[0]?.image?.imageBytes) {
-      base64Data = data.generatedImages[0].image.imageBytes;
-    }
-    // predictions 형식 체크
-    else if (data.predictions?.[0]?.bytesBase64Encoded) {
-      base64Data = data.predictions[0].bytesBase64Encoded;
-    }
-
-    if (!base64Data) {
-      return {
-        success: false,
-        error: '이미지 생성에 실패했습니다. 응답에 이미지가 없습니다.'
+        error: '이미지 생성에 실패했습니다.'
       };
     }
 
     // Base64를 Blob으로 변환
-    const byteCharacters = atob(base64Data);
+    const byteCharacters = atob(data.imageBase64);
     const byteNumbers = new Array(byteCharacters.length);
     for (let i = 0; i < byteCharacters.length; i++) {
       byteNumbers[i] = byteCharacters.charCodeAt(i);
     }
     const byteArray = new Uint8Array(byteNumbers);
-    const imageBlob = new Blob([byteArray], { type: 'image/png' });
+    const imageBlob = new Blob([byteArray], { type: data.mimeType || 'image/png' });
 
     return {
       success: true,
@@ -155,7 +76,7 @@ export const generateInfographicImage = async (
     };
 
   } catch (error) {
-    console.error('Imagen 4 인포그래픽 생성 실패:', error);
+    console.error('Gemini 3 Pro Image 인포그래픽 생성 실패:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.'
@@ -163,36 +84,19 @@ export const generateInfographicImage = async (
   }
 };
 
-// API 키 유효성 검사
+// API 키 유효성 검사 (서버리스 함수 상태 확인)
 export const validateGeminiApiKey = async (): Promise<boolean> => {
-  const apiKey = process.env.GEMINI_API_KEY;
-
-  if (!apiKey) {
-    return false;
-  }
-
   try {
-    const response = await fetch(
-      `${GEMINI_API_BASE}/${IMAGE_MODEL}:generateImages?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          instances: [
-            {
-              prompt: 'A simple blue square'
-            }
-          ],
-          parameters: {
-            sampleCount: 1
-          }
-        })
-      }
-    );
+    const response = await fetch('/api/generate-image', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ prompt: 'test' })
+    });
 
-    return response.ok;
+    // 400 에러가 아니면 API 키가 설정된 것으로 간주
+    return response.status !== 500;
   } catch {
     return false;
   }
