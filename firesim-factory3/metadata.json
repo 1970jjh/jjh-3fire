@@ -1,0 +1,5 @@
+{
+  "name": "FireSim-Factory3",
+  "description": "An interactive PBL simulation for the 3rd Factory Fire Accident, guiding users through problem definition, root cause analysis (5 Whys), and solution planning.",
+  "requestFramePermissions": []
+}
