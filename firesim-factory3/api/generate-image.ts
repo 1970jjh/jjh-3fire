@@ -1,19 +1,21 @@
-// Vercel Serverless Function for Imagen 4 API
+// Vercel Serverless Function for Gemini 3 Pro Image API
 // This bypasses CORS by calling the API from server-side
 
 export const config = {
   runtime: 'edge',
 };
 
-interface ImagenResponse {
-  generatedImages?: Array<{
-    image?: {
-      imageBytes: string;
+interface GeminiResponse {
+  candidates?: Array<{
+    content?: {
+      parts?: Array<{
+        text?: string;
+        inlineData?: {
+          mimeType: string;
+          data: string;
+        };
+      }>;
     };
-  }>;
-  predictions?: Array<{
-    bytesBase64Encoded: string;
-    mimeType: string;
   }>;
   error?: {
     message: string;
@@ -50,26 +52,27 @@ export default async function handler(request: Request) {
     }
 
     const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
-    const IMAGE_MODEL = 'imagen-4.0-generate-001';
+    const IMAGE_MODEL = 'gemini-3-pro-image-preview';
 
     const response = await fetch(
-      `${GEMINI_API_BASE}/${IMAGE_MODEL}:generateImages?key=${apiKey}`,
+      `${GEMINI_API_BASE}/${IMAGE_MODEL}:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          instances: [
+          contents: [
             {
-              prompt: prompt
+              parts: [
+                {
+                  text: prompt
+                }
+              ]
             }
           ],
-          parameters: {
-            sampleCount: 1,
-            aspectRatio: '16:9',
-            personGeneration: 'DONT_ALLOW',
-            safetySetting: 'BLOCK_MEDIUM_AND_ABOVE'
+          generationConfig: {
+            responseModalities: ['Text', 'Image']
           }
         })
       }
@@ -77,7 +80,7 @@ export default async function handler(request: Request) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Imagen 4 API error:', errorText);
+      console.error('Gemini API error:', errorText);
 
       try {
         const errorJson = JSON.parse(errorText);
@@ -97,7 +100,7 @@ export default async function handler(request: Request) {
       });
     }
 
-    const data: ImagenResponse = await response.json();
+    const data: GeminiResponse = await response.json();
 
     if (data.error) {
       return new Response(JSON.stringify({ error: data.error.message }), {
@@ -106,13 +109,19 @@ export default async function handler(request: Request) {
       });
     }
 
-    // Extract image data
+    // Extract image data from Gemini response
     let base64Data: string | undefined;
+    let mimeType = 'image/png';
 
-    if (data.generatedImages?.[0]?.image?.imageBytes) {
-      base64Data = data.generatedImages[0].image.imageBytes;
-    } else if (data.predictions?.[0]?.bytesBase64Encoded) {
-      base64Data = data.predictions[0].bytesBase64Encoded;
+    const parts = data.candidates?.[0]?.content?.parts;
+    if (parts) {
+      for (const part of parts) {
+        if (part.inlineData?.data) {
+          base64Data = part.inlineData.data;
+          mimeType = part.inlineData.mimeType || 'image/png';
+          break;
+        }
+      }
     }
 
     if (!base64Data) {
@@ -125,7 +134,7 @@ export default async function handler(request: Request) {
     return new Response(JSON.stringify({
       success: true,
       imageBase64: base64Data,
-      mimeType: 'image/png'
+      mimeType: mimeType
     }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
