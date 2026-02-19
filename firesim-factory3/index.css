@@ -1,7 +1,8 @@
-/* Global styles for Fire Simulation Factory */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-/* Base reset and styles are handled by Tailwind CSS CDN */
-/* Additional custom styles can be added here */
+/* Global styles for Fire Simulation Factory */
 
 * {
   box-sizing: border-box;

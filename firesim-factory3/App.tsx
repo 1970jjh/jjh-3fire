@@ -5,7 +5,7 @@ import AdminDashboard from './components/AdminDashboard';
 import AdminLogin from './components/AdminLogin';
 import AdminSessionManager from './components/AdminSessionManager';
 import StudentLogin from './components/StudentLogin';
-import { Smartphone, Monitor, User, Flame, Lock, LogOut, Loader2 } from 'lucide-react';
+import { Smartphone, Monitor, User, Flame, Lock, LogOut, Loader2, AlertTriangle } from 'lucide-react';
 import {
   subscribeToSessions,
   createSessionWithId,
@@ -48,13 +48,22 @@ export default function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [sessions, setSessions] = useState<SessionConfig[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Firebase에서 세션 목록 실시간 구독
   useEffect(() => {
-    const unsubscribe = subscribeToSessions((fetchedSessions) => {
-      setSessions(fetchedSessions);
-      setIsLoading(false);
-    });
+    const unsubscribe = subscribeToSessions(
+      (fetchedSessions) => {
+        setSessions(fetchedSessions);
+        setIsLoading(false);
+        setLoadError(null);
+      },
+      (error) => {
+        console.error('Firebase 연결 오류:', error);
+        setIsLoading(false);
+        setLoadError('Firebase 연결에 실패했습니다. 권한을 확인해주세요.');
+      }
+    );
 
     return () => unsubscribe();
   }, []);
@@ -75,6 +84,8 @@ export default function App() {
           isTimerRunning: data.isTimerRunning ?? false,
         }));
       }
+    }, (error) => {
+      console.error('세션 구독 오류:', error);
     });
 
     return () => unsubscribe();
@@ -154,6 +165,25 @@ export default function App() {
         <div className="text-center">
           <Loader2 className="w-12 h-12 mx-auto mb-4 animate-spin text-gray-500" />
           <p className="font-bold text-gray-600">데이터 불러오는 중...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // --- 에러 화면 ---
+  if (loadError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white border-2 border-black shadow-[8px_8px_0px_0px_#000] p-8 text-center">
+          <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-red-500" />
+          <h2 className="text-xl font-black mb-2">연결 오류</h2>
+          <p className="font-bold text-gray-600 mb-4">{loadError}</p>
+          <button
+            onClick={() => { setIsLoading(true); setLoadError(null); window.location.reload(); }}
+            className="px-6 py-3 bg-black text-white font-bold border-2 border-black shadow-[4px_4px_0px_0px_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_#000] transition-all"
+          >
+            다시 시도
+          </button>
         </div>
       </div>
     );

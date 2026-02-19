@@ -55,7 +55,8 @@ export const getAllSessions = async (): Promise<SessionConfig[]> => {
 
 // 세션 실시간 구독
 export const subscribeToSessions = (
-  callback: (sessions: SessionConfig[]) => void
+  callback: (sessions: SessionConfig[]) => void,
+  onError?: (error: Error) => void
 ): Unsubscribe => {
   const sessionsRef = collection(db, 'sessions');
   const q = query(sessionsRef, orderBy('createdAt', 'desc'));
@@ -67,6 +68,9 @@ export const subscribeToSessions = (
       createdAt: doc.data().createdAt?.toMillis() || Date.now()
     })) as SessionConfig[];
     callback(sessions);
+  }, (error) => {
+    console.error('세션 구독 오류:', error);
+    if (onError) onError(error);
   });
 };
 
@@ -157,7 +161,8 @@ export const getReportsBySession = async (sessionId: string): Promise<ReportData
 // 세션 보고서 실시간 구독
 export const subscribeToReports = (
   sessionId: string,
-  callback: (reports: ReportData[]) => void
+  callback: (reports: ReportData[]) => void,
+  onError?: (error: Error) => void
 ): Unsubscribe => {
   const reportsRef = collection(db, 'reports');
   const q = query(
@@ -173,6 +178,9 @@ export const subscribeToReports = (
     // 팀 번호순으로 정렬
     reports.sort((a, b) => a.teamId - b.teamId);
     callback(reports);
+  }, (error) => {
+    console.error('보고서 구독 오류:', error);
+    if (onError) onError(error);
   });
 };
 
@@ -250,7 +258,8 @@ export const checkTeamAIReportSubmitted = async (
 export const subscribeToTeamAIReportStatus = (
   sessionId: string,
   teamId: number,
-  callback: (submitted: boolean) => void
+  callback: (submitted: boolean) => void,
+  onError?: (error: Error) => void
 ): Unsubscribe => {
   const reportsRef = collection(db, 'reports');
   const q = query(
@@ -262,6 +271,9 @@ export const subscribeToTeamAIReportStatus = (
   return onSnapshot(q, (snapshot) => {
     const hasSubmitted = snapshot.docs.some(doc => doc.data().aiReportSubmitted === true);
     callback(hasSubmitted);
+  }, (error) => {
+    console.error('AI 보고서 상태 구독 오류:', error);
+    if (onError) onError(error);
   });
 };
 
